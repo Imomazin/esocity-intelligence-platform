@@ -21,7 +21,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       DEMO_MODE: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -44,7 +44,7 @@ jobs:
       run:
         working-directory: services/ml-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -73,7 +73,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://esocity:ci_local_only@localhost:5432/esocity
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
