@@ -1,0 +1,60 @@
+# Local development dependencies for Esocity Intelligence.
+#
+#   docker compose up -d            # PostgreSQL, Redis (+ Upstash-compatible REST proxy), ML API
+#   pnpm dev                        # run the web app on the host
+#
+# All ports bind to 127.0.0.1 only. Credentials here are LOCAL DEVELOPMENT placeholders
+# for throwaway containers — never reuse them anywhere else.
+
+name: esocity
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: esocity
+      POSTGRES_USER: esocity
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:-esocity_local_only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esocity -d esocity"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Upstash-compatible REST API in front of Redis so the app uses the same client locally.
+  redis-rest:
+    image: hiett/serverless-redis-http:latest
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${LOCAL_REDIS_REST_TOKEN:-esocity_local_only_token}
+      SRH_CONNECTION_STRING: redis://redis:6379
+    ports:
+      - "127.0.0.1:8079:80"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ml-api:
+    build: ./services/ml-api
+    environment:
+      ESOCITY_ENV: development
+      ML_API_KEY: ${LOCAL_ML_API_KEY:-esocity-local-only-ml-key}
+      LOG_LEVEL: info
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  postgres-data:

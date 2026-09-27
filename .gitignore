@@ -1,0 +1,63 @@
+# ─── Dependencies ────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+
+# ─── Next.js / build output ──────────────────────────────────────
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.tsbuildinfo
+
+# ─── Testing / coverage ──────────────────────────────────────────
+coverage/
+.vitest/
+playwright-report/
+test-results/
+
+# ─── Environment & secrets (NEVER commit real values) ────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+# ─── Deployment tooling ──────────────────────────────────────────
+.vercel/
+.turbo/
+
+# ─── Python (services/ml-api) ────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+services/ml-api/artifacts/
+
+# ─── Logs & OS / editor noise ────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# ─── Local databases / docker volumes ────────────────────────────
+*.sqlite
+*.db
+.docker-data/

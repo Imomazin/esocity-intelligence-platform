@@ -1,0 +1,283 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Esocity design tokens
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Surfaces are cool slate neutrals for an institutional, restrained look.
+ * Chart series use the validated categorical palette (fixed order, never cycled),
+ * re-validated against these exact surfaces (light #ffffff, dark #11161d).
+ * Up/down text tokens were checked for WCAG AA text contrast (>= 4.5:1).
+ * Status colours (good / warning / serious / critical) are reserved for state and
+ * always ship with an icon + label — never colour alone.
+ */
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  /* Semantic direction tokens (text-safe) */
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-neutral: var(--neutral);
+
+  /* Status scale (reserved meaning; pair with icon + label) */
+  --color-status-good: var(--status-good);
+  --color-status-warning: var(--status-warning);
+  --color-status-serious: var(--status-serious);
+  --color-status-critical: var(--status-critical);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-serious-text: var(--status-serious-text);
+
+  /* Categorical chart series — fixed order */
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
+
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+  --color-diverging-mid: var(--diverging-mid);
+  --color-outcome-home: var(--outcome-home);
+  --color-outcome-away: var(--outcome-away);
+  --color-on-outcome-home: var(--on-outcome-home);
+  --color-on-outcome-away: var(--on-outcome-away);
+  --color-on-outcome-draw: var(--on-outcome-draw);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  --background: #f5f6f8;
+  --foreground: #0b1220;
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --popover: #ffffff;
+  --popover-foreground: #0b1220;
+  --primary: #256abf;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f5;
+  --secondary-foreground: #0b1220;
+  --muted: #eef1f5;
+  --muted-foreground: #5b6474;
+  --accent: #eaf1fb;
+  --accent-foreground: #0d366b;
+  --destructive: #c42b2b;
+  --border: #e3e6eb;
+  --input: #d9dde3;
+  --ring: #256abf;
+
+  --sidebar: #fbfbfc;
+  --sidebar-foreground: #0b1220;
+  --sidebar-accent: #eaf1fb;
+  --sidebar-accent-foreground: #0d366b;
+  --sidebar-border: #e3e6eb;
+
+  --positive: #0a7a32;
+  --negative: #c42b2b;
+  --neutral: #5b6474;
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --status-warning-text: #8a5a00;
+  --status-serious-text: #b2461b;
+
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+
+  --chart-surface: #ffffff;
+  --chart-grid: #e7e9ee;
+  --chart-axis: #c5cbd4;
+  --chart-text: #5b6474;
+  --diverging-mid: #8a94a3;
+
+  /* 1X2 outcome bar (diverging blue ↔ orange, grey midpoint). Label inks chosen per fill so
+     in-segment text clears 4.5:1. */
+  --outcome-home: #256abf;
+  --outcome-away: #eb6834;
+  --on-outcome-home: #ffffff;
+  --on-outcome-away: #0b1220;
+  --on-outcome-draw: #0b1220;
+
+  /* Sequential (single hue, light → dark). Low anchor sits near the surface. */
+  --heat-low: #eef4fd;
+  --heat-high: #104281;
+  --heat-ink-low: #0b1220;
+  --heat-ink-high: #ffffff;
+}
+
+.dark {
+  --background: #0a0d12;
+  --foreground: #f3f5f8;
+  --card: #11161d;
+  --card-foreground: #f3f5f8;
+  --popover: #141a22;
+  --popover-foreground: #f3f5f8;
+  --primary: #6da7ec;
+  --primary-foreground: #0a0d12;
+  --secondary: #1a212b;
+  --secondary-foreground: #f3f5f8;
+  --muted: #1a212b;
+  --muted-foreground: #9aa4b2;
+  --accent: #172233;
+  --accent-foreground: #cde2fb;
+  --destructive: #f07171;
+  --border: #232b36;
+  --input: #2b3441;
+  --ring: #6da7ec;
+
+  --sidebar: #0d1117;
+  --sidebar-foreground: #f3f5f8;
+  --sidebar-accent: #172233;
+  --sidebar-accent-foreground: #cde2fb;
+  --sidebar-border: #1c232d;
+
+  --positive: #2fbf5b;
+  --negative: #f07171;
+  --neutral: #9aa4b2;
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --status-warning-text: #fab219;
+  --status-serious-text: #ec835a;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+
+  --chart-surface: #11161d;
+  --chart-grid: #1f2731;
+  --chart-axis: #333d4a;
+  --chart-text: #9aa4b2;
+  --diverging-mid: #6b7483;
+
+  --outcome-home: #3987e5;
+  --outcome-away: #d95926;
+  --on-outcome-home: #0a0d12;
+  --on-outcome-away: #0a0d12;
+  --on-outcome-draw: #ffffff;
+
+  /* Sequential flips its anchor in dark mode: "near zero" sits near the dark surface. */
+  --heat-low: #141c27;
+  --heat-high: #86b6ef;
+  --heat-ink-low: #f3f5f8;
+  --heat-ink-high: #0a0d12;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 25%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Tabular figures only where numbers align vertically (tables, axes). */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff;
+  }
+}

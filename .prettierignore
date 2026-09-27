@@ -1,0 +1,15 @@
+# Generated / vendored
+.next/
+out/
+build/
+coverage/
+node_modules/
+pnpm-lock.yaml
+next-env.d.ts
+db/migrations/
+
+# Python service is formatted by ruff
+services/ml-api/
+
+# Parity fixtures are generated JSON
+**/fixtures/*.json

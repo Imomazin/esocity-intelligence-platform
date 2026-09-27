@@ -1,0 +1,51 @@
+[project]
+name = "esocity-ml-api"
+version = "0.1.0"
+description = "Esocity Intelligence ML service: football goal models, market signals, gradient-boosted direction models and backtests."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<4",
+  "scikit-learn>=1.5,<2",
+]
+
+[project.optional-dependencies]
+# XGBoost is optional: without it the direction model falls back to scikit-learn's
+# HistGradientBoostingClassifier. `xgboost-cpu` is the slim CPU-only wheel (Linux/Windows);
+# use `xgboost` on macOS.
+xgboost = ["xgboost-cpu>=2.1; sys_platform != 'darwin'", "xgboost>=2.1; sys_platform == 'darwin'"]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF", "PL", "S"]
+ignore = [
+  "PLR0913",  # many-argument functions mirror the documented model parameters
+  "PLR2004",  # published model constants are inline by design (see docs/*_ENGINE.md)
+  "PLR0912",
+  "PLR0915",
+  "RUF001",   # ambiguous unicode in strings (λ, ρ, −) is intentional
+  "RUF002",
+  "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "S311"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:app.*", "ignore:Using `httpx` with `starlette.testclient`"]
