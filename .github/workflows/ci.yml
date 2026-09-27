@@ -22,7 +22,7 @@ jobs:
       DEMO_MODE: "true"
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -74,7 +74,7 @@ jobs:
       DATABASE_URL: postgresql://esocity:ci_local_only@localhost:5432/esocity
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
