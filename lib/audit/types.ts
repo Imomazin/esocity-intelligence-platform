@@ -7,6 +7,7 @@ export const AUDIT_ACTIONS = [
   "backtest.run",
   "model.evaluated",
   "preferences.updated",
+  "ingestion.run",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -67,6 +67,7 @@ export async function getSportsOverview(
 ): Promise<SportsOverview> {
   const provider = getSportsDataProvider();
   const now = getNow();
+  const nowIso = now.toISOString();
   const horizon = new Date(now.getTime() + (options.upcomingDays ?? 10) * 86_400_000).toISOString();
   const [competitions, matches] = await Promise.all([
     provider.listCompetitions(),
@@ -89,8 +90,12 @@ export async function getSportsOverview(
       isSimulated: provider.isSimulated,
     },
     competitions,
+    // A fixture past its kick-off still awaiting a result update is no longer "upcoming".
     upcoming: matches
-      .filter((match) => match.status === "scheduled" && match.kickoffAt <= horizon)
+      .filter(
+        (match) =>
+          match.status === "scheduled" && match.kickoffAt >= nowIso && match.kickoffAt <= horizon,
+      )
       .map((match) => summariseMatch(match, competitions)),
     live: matches
       .filter((match) => match.status === "live")
@@ -115,10 +120,13 @@ export async function getFootballFixtures(filter: FixtureFilter = {}): Promise<{
   const provider = getSportsDataProvider();
   const competitions = await provider.listCompetitions("football");
   const known = competitions.some((competition) => competition.key === filter.competition);
-  const matches = await provider.listMatches({
-    competitionKey: known ? filter.competition : undefined,
-    status: filter.view === "results" ? ["finished"] : ["scheduled", "live"],
-  });
+  const nowIso = getNow().toISOString();
+  const matches = (
+    await provider.listMatches({
+      competitionKey: known ? filter.competition : undefined,
+      status: filter.view === "results" ? ["finished"] : ["scheduled", "live"],
+    })
+  ).filter((match) => match.status !== "scheduled" || match.kickoffAt >= nowIso);
   const ordered = filter.view === "results" ? [...matches].reverse() : matches;
   return {
     competitions,
@@ -151,6 +159,11 @@ export async function getMatchDetail(id: string): Promise<MatchDetail | null> {
 
   return {
     match,
+    provider: {
+      id: provider.id,
+      displayName: provider.displayName,
+      isSimulated: provider.isSimulated,
+    },
     competition,
     prediction,
     engine,

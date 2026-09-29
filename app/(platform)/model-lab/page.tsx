@@ -84,8 +84,13 @@ export default async function ModelLabPage() {
       </section>
 
       <Disclaimer>
-        Metrics are computed live on synthetic demo data to demonstrate the evaluation pipeline.
-        They are not evidence of performance on real markets or real competitions.
+        {view.origins.marketsSimulated && view.origins.sportsSimulated
+          ? "Metrics are computed live on synthetic demo data to demonstrate the evaluation pipeline. They are not evidence of performance on real markets or real competitions."
+          : `Metrics are computed live and out-of-sample on the ingested history${
+              view.origins.marketsSimulated || view.origins.sportsSimulated
+                ? ` (${view.origins.marketsSimulated ? "markets" : "football"}: synthetic demo data)`
+                : ""
+            }. Past model skill is no guarantee of future performance.`}
       </Disclaimer>
     </div>
   );

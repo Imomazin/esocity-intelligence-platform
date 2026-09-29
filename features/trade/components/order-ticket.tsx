@@ -30,6 +30,8 @@ interface OrderTicketProps {
   execution: ExecutionConfig;
   limits: { maxQuantity: number; concentrationWarning: number };
   defaultSymbol?: string;
+  /** What the reference price is, e.g. "the current demo quote". */
+  quoteLabel?: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export function OrderTicket({
   execution,
   limits,
   defaultSymbol = "NVDA",
+  quoteLabel = "the current quote",
 }: OrderTicketProps) {
   const ids = useId();
   const [symbol, setSymbol] = useState(
@@ -243,7 +246,7 @@ export function OrderTicket({
         {result?.message}
       </p>
       <p id={`${ids}-disclaimer`} className="text-[11px] leading-relaxed text-muted-foreground">
-        Simulated execution: fills at the current demo quote ± {execution.slippageBps} bps slippage,
+        Simulated execution: fills at {quoteLabel} ± {execution.slippageBps} bps slippage,
         commission {execution.commissionBps} bps (min {formatCurrency(execution.minimumCommission)}
         ). No real money, no broker connection. Orders the server rejects are still recorded with
         the reason.

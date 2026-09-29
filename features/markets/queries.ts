@@ -38,12 +38,14 @@ function sessionInfo(provider: MarketDataProvider): SessionInfo {
 }
 
 /**
- * Universe analysis, memoised per provider + last completed trading day (the analysis only
- * changes when a new daily bar completes). Quotes are fetched fresh on every call.
+ * Universe analysis, memoised per provider + last completed trading day + data version (the
+ * analysis only changes when a new daily bar completes or ingestion rewrites history). Quotes
+ * are fetched fresh on every call.
  */
 export async function getUniverseAnalysis(): Promise<UniverseAnalysis> {
   const provider = getMarketDataProvider();
-  const key = `${provider.id}:${provider.getSession().lastCompletedDate}`;
+  const version = (await provider.getDataVersion?.()) ?? "";
+  const key = `${provider.id}:${provider.getSession().lastCompletedDate}:${version}`;
   const cached = globalForMarkets.__esocityUniverse;
   if (cached?.key === key) return cached.analysis;
 
@@ -75,7 +77,10 @@ export async function getQuotes(): Promise<Map<string, Quote>> {
 
 function toSummary(asset: AssetAnalysis, quote: Quote | undefined): AssetSummary {
   const closes = asset.bars.slice(-SPARKLINE_BARS).map((bar) => bar.close);
-  if (quote && quote.session === "open") closes.push(quote.price);
+  // Append the intraday price only when the quote is newer than the last completed bar.
+  if (quote && quote.session === "open" && quote.sessionDate > asset.latest.date) {
+    closes.push(quote.price);
+  }
   return {
     symbol: asset.profile.symbol,
     name: asset.profile.name,

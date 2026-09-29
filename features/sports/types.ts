@@ -59,6 +59,7 @@ export interface SportsOverview {
 
 export interface MatchDetail {
   match: Match;
+  provider: { id: string; displayName: string; isSimulated: boolean };
   competition: Competition;
   prediction: MatchPrediction;
   engine: EngineInfo;

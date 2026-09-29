@@ -15,6 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  IngestionRunsCard,
+  MarketPipelineCard,
+  SportsPipelineCard,
+} from "@/features/admin/components/data-pipeline";
 import { getAdminView } from "@/features/admin/queries";
 import { buildDemoSession } from "@/lib/auth/demo";
 import { getSession } from "@/lib/auth/session";
@@ -98,7 +103,7 @@ export default async function AdminPage() {
     );
   }
 
-  const { health, audit, registries, controls } = await getAdminView();
+  const { health, audit, registries, controls, pipeline } = await getAdminView();
   const { checks } = health;
   const configErrors = health.configuration.issues.filter((issue) => issue.severity === "error");
 
@@ -216,7 +221,13 @@ export default async function AdminPage() {
             status={checks.marketData.status}
             details={[
               { label: "Provider", value: checks.marketData.provider },
-              { label: "Data", value: checks.marketData.simulated ? "Simulated" : "Live" },
+              {
+                label: "Data",
+                value: checks.marketData.simulated ? "Simulated" : "Licensed · end-of-day",
+              },
+              ...(checks.marketData.error
+                ? [{ label: "Detail", value: checks.marketData.error }]
+                : []),
             ]}
           />
           <DependencyCard
@@ -225,10 +236,30 @@ export default async function AdminPage() {
             status={checks.sportsData.status}
             details={[
               { label: "Provider", value: checks.sportsData.provider },
-              { label: "Data", value: checks.sportsData.simulated ? "Simulated" : "Live" },
+              {
+                label: "Data",
+                value: checks.sportsData.simulated ? "Simulated" : "Licensed · daily",
+              },
+              ...(checks.sportsData.error
+                ? [{ label: "Detail", value: checks.sportsData.error }]
+                : []),
             ]}
           />
         </div>
+      </section>
+
+      <section aria-labelledby="pipeline-heading" className="space-y-3">
+        <h2
+          id="pipeline-heading"
+          className="text-sm font-semibold tracking-wide text-muted-foreground uppercase"
+        >
+          Data pipeline
+        </h2>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <MarketPipelineCard panel={pipeline.markets} />
+          <SportsPipelineCard panel={pipeline.sports} />
+        </div>
+        <IngestionRunsCard markets={pipeline.markets} sports={pipeline.sports} />
       </section>
 
       <div className="grid gap-4 xl:grid-cols-2">

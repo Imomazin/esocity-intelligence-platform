@@ -69,7 +69,9 @@ export default async function DashboardPage() {
         meta={
           <DataSourceNote
             simulated={market.provider.isSimulated}
-            source="Synthetic demo data"
+            source={
+              market.provider.isSimulated ? "Synthetic demo data" : market.provider.displayName
+            }
             asOf={`Markets through ${formatDate(market.asOf)}`}
           />
         }
@@ -209,7 +211,11 @@ export default async function DashboardPage() {
         </SectionCard>
         <SectionCard
           title="Prediction performance"
-          description="Out-of-sample, synthetic demo data"
+          description={
+            market.provider.isSimulated === sports.provider.isSimulated
+              ? `Out-of-sample, ${market.provider.isSimulated ? "synthetic demo data" : "licensed data"}`
+              : `Out-of-sample · markets ${market.provider.isSimulated ? "synthetic" : "licensed"}, football ${sports.provider.isSimulated ? "synthetic" : "licensed"}`
+          }
           action={<ViewAll href="/model-lab" label="Model Lab" />}
         >
           <KeyValueList

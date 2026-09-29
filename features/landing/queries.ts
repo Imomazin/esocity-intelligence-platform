@@ -2,10 +2,13 @@ import "server-only";
 
 import { getMarketOverview } from "@/features/markets/queries";
 import type { AssetSummary, MarketOverview } from "@/features/markets/types";
+import { getDataSources, type DataSources } from "@/features/platform/data-sources";
 import { getSportsOverview } from "@/features/sports/queries";
 import type { MatchSummary, SportsOverview } from "@/features/sports/types";
 import { getPaperTradingViewForAccount } from "@/features/trade/service";
 import type { PaperTradingView } from "@/features/trade/types";
+import { logger } from "@/lib/logger";
+import { rethrowControlFlow } from "@/lib/request-time";
 
 export interface LandingPreview {
   asOf: string;
@@ -16,13 +19,25 @@ export interface LandingPreview {
   featuredMatch: MatchSummary | null;
   sportsEvaluation: SportsOverview["evaluation"];
   paper: Pick<PaperTradingView, "summary" | "risk" | "positions">;
+  sources: DataSources;
 }
 
 /**
- * Live output from the demo engines for the public landing page. No cookies or per-visitor
- * state are read, so the page stays statically cacheable (ISR).
+ * Live engine output for the public landing page. No cookies or per-visitor state are read, so
+ * with the demo providers the page stays statically cacheable (ISR). Returns null when the data
+ * cannot be loaded (e.g. licensed data not ingested yet): the public page must still render.
  */
-export async function getLandingPreview(): Promise<LandingPreview> {
+export async function getLandingPreview(): Promise<LandingPreview | null> {
+  try {
+    return await buildLandingPreview();
+  } catch (error) {
+    rethrowControlFlow(error);
+    logger.error("landing.preview_unavailable", { error });
+    return null;
+  }
+}
+
+async function buildLandingPreview(): Promise<LandingPreview> {
   const [market, sports, paper] = await Promise.all([
     getMarketOverview(),
     getSportsOverview({ upcomingDays: 10 }),
@@ -51,5 +66,6 @@ export async function getLandingPreview(): Promise<LandingPreview> {
     featuredMatch,
     sportsEvaluation: sports.evaluation,
     paper: { summary: paper.summary, risk: paper.risk, positions: paper.positions },
+    sources: getDataSources(),
   };
 }

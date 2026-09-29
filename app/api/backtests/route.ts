@@ -7,6 +7,7 @@ import { readSession } from "@/lib/api/session-route";
 import { STRATEGIES, STRATEGY_IDS } from "@/lib/backtesting/strategies";
 import { getServerEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { getMarketDataProvider } from "@/lib/markets/providers";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -73,8 +74,9 @@ export const POST = apiRoute(
         requestId,
         demoMode: env.DEMO_MODE,
         engine: data.engine,
-        disclaimer:
-          "Simulated results on synthetic data. Past performance does not predict future results.",
+        disclaimer: `Simulated results on ${
+          getMarketDataProvider().isSimulated ? "synthetic data" : "historical end-of-day prices"
+        }. Past performance does not predict future results.`,
       },
       { status: 201 },
     );

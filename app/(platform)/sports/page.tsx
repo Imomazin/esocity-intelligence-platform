@@ -154,7 +154,10 @@ export default async function SportsPage() {
       </div>
 
       <Disclaimer>
-        {siteConfig.sportsDisclaimer} Clubs and competitions shown are fictional demo data.
+        {siteConfig.sportsDisclaimer}{" "}
+        {overview.provider.isSimulated
+          ? "Clubs and competitions shown are fictional demo data."
+          : `Fixtures and results: ${overview.provider.displayName}.`}
       </Disclaimer>
     </div>
   );

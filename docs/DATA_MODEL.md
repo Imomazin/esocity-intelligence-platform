@@ -8,7 +8,7 @@ Conventions: UUID primary keys (`gen_random_uuid()`), `created_at` / `updated_at
 deliberate `ON DELETE` behaviour, `CHECK` constraints for invariants, and indexes for every
 access path the app uses.
 
-## Tables (23)
+## Tables (24)
 
 | Domain  | Table                             | Purpose / notable constraints                                                                       |
 | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -31,6 +31,7 @@ access path the app uses.
 |         | `backtests`, `backtest_results`   | Run config (date-order, capital, cost checks) and 1:1 results with equity curve                     |
 | System  | `notifications`                   | Per-user notifications with read state                                                              |
 |         | `audit_events`                    | **Append-only** audit trail (trigger blocks UPDATE/DELETE)                                          |
+|         | `ingestion_runs`                  | Licensed-data ingestion log; partial unique index = one `running` run per domain (a lease)          |
 
 ```mermaid
 erDiagram
@@ -62,6 +63,22 @@ erDiagram
 `audit_events.actor_id` is intentionally **not** a foreign key: audit rows must outlive the
 actors they describe.
 
+## Licensed data
+
+Ingestion ([DATA_PIPELINE.md](DATA_PIPELINE.md)) writes into the same tables the demo seed uses,
+kept apart by provenance:
+
+- `market_prices.source` is the provider id (`polygon`); the stored provider reads only its own
+  source, so demo-seeded bars (`source = 'demo'`) never mix in. A licensed upsert takes over a
+  demo row for the same asset and date.
+- Football rows use provider-prefixed keys: competitions `apif-l{league}` (one row per season),
+  teams `apif-t{team}`, matches `external_ref = apif-{fixture}` (also the public match id).
+- `matches.context` is a JSON document built by several writers — fixture sync (`provider`,
+  `providerStatus`, `round`, `referee`), expected goals (`xg`, `xgChecked`) and availability
+  (`availability.home/away.out/doubtful`, `checkedAt`) — so writes merge (`context || patch`)
+  instead of replacing it.
+- `ingestion_runs.items` holds the per-symbol / per-competition outcome of each run.
+
 ## Paper accounts in demo mode
 
 Demo visitors are anonymous. Their account id is the random UUID in the `esocity_demo_sid`
@@ -83,5 +100,7 @@ migration so it is reviewed like any other schema change.
 
 ## Future: time-series storage
 
-At real data volumes, move `market_prices` to TimescaleDB hypertables (or partition by month)
-and add continuous aggregates for intraday bars — see ROADMAP Phase 2.
+Daily bars for a 50-symbol universe stay small (≈ 12,500 rows a year). Before intraday bars or
+much larger universes, move `market_prices` to TimescaleDB hypertables (or partition by month)
+and add continuous aggregates — see ROADMAP Phase 2. Note that a hypertable needs the time
+column in every unique index, including the primary key.

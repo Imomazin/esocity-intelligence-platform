@@ -81,3 +81,13 @@ export const notificationSeverity = pgEnum("notification_severity", [
 
 export const auditActorType = pgEnum("audit_actor_type", ["user", "demo", "system", "service"]);
 export const auditOutcome = pgEnum("audit_outcome", ["success", "failure"]);
+
+export const dataDomain = pgEnum("data_domain", ["markets", "sports"]);
+export const ingestionStatus = pgEnum("ingestion_status", [
+  "running",
+  "succeeded",
+  "partial",
+  "failed",
+  "abandoned",
+]);
+export const ingestionTrigger = pgEnum("ingestion_trigger", ["schedule", "manual"]);

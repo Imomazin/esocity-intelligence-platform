@@ -11,15 +11,27 @@ the market session. `DemoMarketDataProvider` generates a **deterministic synthet
 per-asset beta and an Ornstein–Uhlenbeck latent drift, weak mean reversion to an anchor, and
 Brownian-bridge intraday quotes. Same inputs → same prices, everywhere.
 
-Planned providers (documented placeholders, refused at runtime until implemented): Polygon.io,
-Twelve Data, Alpha Vantage, Financial Modeling Prep, Bloomberg / LSEG enterprise feeds.
+**Licensed data (`MARKET_DATA_PROVIDER=polygon`).** Split-adjusted daily bars from Polygon.io
+are ingested after each US close into `market_prices` (`source = 'polygon'`) and served by
+`StoredMarketDataProvider` from PostgreSQL — see [DATA_PIPELINE.md](DATA_PIPELINE.md). The
+session uses the NYSE calendar (`lib/markets/calendar.ts`: holidays, observance rules, 13:00 early
+closes); only completed sessions are stored, and quotes are the last close labelled delayed.
+Symbols need 130 bars before they are analysed. The engine formulas below are identical for
+synthetic and licensed data.
+
+Planned providers (documented placeholders, refused at runtime until implemented): Twelve Data,
+Alpha Vantage, Financial Modeling Prep, Bloomberg / LSEG enterprise feeds.
 
 ### Adding a provider
 
-1. Implement `MarketDataProvider` in `lib/markets/providers/<name>-provider.ts` (normalise to
-   `PriceBar`, UTC dates, adjusted closes).
-2. Register it in `providers/index.ts` and mark it `available` in `registry.ts`.
-3. Ingest on a schedule into `market_prices`; serve pages from the database, not per request.
+1. Implement `MarketHistorySource` (`lib/markets/ingestion.ts`) in
+   `lib/markets/providers/<name>.ts` on top of `ProviderHttpClient` (`lib/providers/http.ts`):
+   split-adjusted daily `PriceBar`s keyed by exchange-local trading date, reference data mapped
+   to `AssetProfile`, credentials in headers only.
+2. Wire it into `lib/ingestion/service.ts` and serve it with `StoredMarketDataProvider` in
+   `providers/index.ts` (`source` = the provider id); mark it `available` in `registry.ts` and
+   `IMPLEMENTED_MARKET_PROVIDERS` in `lib/env.ts`.
+3. Add adapter tests with recorded payloads (see `tests/unit/market-ingestion.test.ts`).
 4. Respect licence terms for display and redistribution.
 
 ## Indicators (causal — value at t uses bars 0..t only)
@@ -79,5 +91,7 @@ LOW < 25 ≤ MODERATE < 50 ≤ HIGH < 75 ≤ VERY HIGH.
 
 ## Limitations
 
-Synthetic data; technical features only; 20-day horizon; no transaction-cost-aware sizing.
-Signals are research tools, **not personalised financial advice**.
+Technical features only; 20-day horizon; no transaction-cost-aware sizing. The demo universe
+is synthetic; licensed data is end-of-day, split-adjusted (not dividend-adjusted) and typically
+two years deep, so walk-forward evaluation rests on a short history. Signals are research tools,
+**not personalised financial advice**.

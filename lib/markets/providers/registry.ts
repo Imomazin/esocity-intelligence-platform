@@ -3,11 +3,11 @@ import type { MarketDataProviderId } from "@/lib/env";
 /**
  * Market data provider registry.
  *
- * Only `demo` is implemented in Phase 1. The remaining entries are documented placeholders:
- * each lists the environment variables it will need and the integration notes an engineer
- * needs to implement `MarketDataProvider` for it (see docs/MARKETS_ENGINE.md → "Adding a
- * provider"). Selecting a planned provider fails loudly at runtime rather than silently
- * serving demo data in its place.
+ * `demo` (synthetic) and `polygon` (licensed, ingested into PostgreSQL) are implemented. The
+ * remaining entries are documented placeholders: each lists the environment variables it will
+ * need and the integration notes an engineer needs to add an ingestion source for it (see
+ * docs/MARKETS_ENGINE.md → "Adding a provider"). Selecting a planned provider fails loudly at
+ * runtime rather than silently serving demo data in its place.
  */
 
 export type ProviderStatus = "available" | "planned";
@@ -32,11 +32,19 @@ export const MARKET_DATA_PROVIDERS: ProviderDescriptor<MarketDataProviderId>[] =
   },
   {
     id: "polygon",
-    name: "Polygon.io",
-    status: "planned",
-    coverage: "US equities, options, FX, crypto — aggregates, trades, quotes, websockets",
-    envVars: ["POLYGON_API_KEY"],
-    notes: "Use /v2/aggs for daily bars; websocket feed for live quotes via a background worker.",
+    name: "Polygon.io (Massive)",
+    status: "available",
+    coverage:
+      "US equities and ETFs — split-adjusted daily bars and reference data, ingested into PostgreSQL",
+    envVars: [
+      "POLYGON_API_KEY",
+      "MARKET_DATA_SYMBOLS",
+      "POLYGON_REQUESTS_PER_MINUTE",
+      "DATABASE_URL",
+      "CRON_SECRET",
+    ],
+    notes:
+      "Scheduled end-of-day ingestion (/api/cron/ingest/markets or `pnpm ingest markets`) with validation and split/restatement detection; pages read PostgreSQL, never the API. Quotes are the last close (delayed).",
   },
   {
     id: "twelvedata",

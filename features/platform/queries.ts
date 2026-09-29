@@ -1,8 +1,11 @@
 import "server-only";
 
 import { getUniverseAnalysis } from "@/features/markets/queries";
-import { getNow } from "@/lib/clock";
+import { getDataSources, type DataSources } from "@/features/platform/data-sources";
+import { getNow, toIsoDate } from "@/lib/clock";
 import { formatProbability } from "@/lib/format";
+import { logger } from "@/lib/logger";
+import { rethrowControlFlow } from "@/lib/request-time";
 import { getSportsDataProvider } from "@/lib/sports/providers";
 import { predictMatch } from "@/lib/sports/football-model";
 
@@ -98,42 +101,116 @@ const PAGE_COMMANDS: CommandItem[] = [
   },
 ];
 
-/** Data for the platform shell: derived notifications and the command palette index. */
+function dataNotifications(
+  sources: DataSources,
+  asOf: string,
+  state: { marketsFailed: boolean; sportsFailed: boolean; now: string },
+): PlatformNotification[] {
+  const notifications: PlatformNotification[] = [];
+  for (const [failed, label] of [
+    [state.marketsFailed, "Market"],
+    [state.sportsFailed, "Sports"],
+  ] as const) {
+    if (!failed) continue;
+    notifications.push({
+      id: `data-unavailable-${label.toLowerCase()}`,
+      kind: "system",
+      severity: "warning",
+      title: `${label} data is unavailable`,
+      body: "The latest data could not be loaded. Pages that depend on it show an error until the data pipeline recovers — see System status.",
+      href: "/admin",
+      at: state.now,
+    });
+  }
+  const { markets, sports } = sources;
+  if (markets.simulated && sports.simulated) {
+    notifications.push({
+      id: "system-demo-data",
+      kind: "system",
+      severity: "info",
+      title: "You are viewing synthetic demo data",
+      body: "Prices, fixtures and results are simulated. Nothing here is a real market or match.",
+      href: "/admin",
+      at: `${asOf}T08:00:00.000Z`,
+    });
+  } else if (markets.simulated || sports.simulated) {
+    notifications.push({
+      id: "system-mixed-data",
+      kind: "system",
+      severity: "info",
+      title: markets.simulated
+        ? "Market data is synthetic; football data is licensed"
+        : "Football data is synthetic; market data is licensed",
+      body: `Markets: ${markets.simulated ? "simulated demo prices" : markets.name}. Football: ${sports.simulated ? "fictional demo competitions" : sports.name}.`,
+      href: "/admin",
+      at: `${asOf}T08:00:00.000Z`,
+    });
+  }
+  return notifications;
+}
+
+/**
+ * Data for the platform shell: derived notifications and the command palette index.
+ *
+ * The shell must render even when licensed data cannot be loaded (nothing ingested yet, database
+ * unreachable) so that System status stays reachable. Failures are logged as errors and surfaced
+ * as warning notifications; the affected pages still fail loudly on their own.
+ */
 export async function getShellData(): Promise<ShellData> {
   const now = getNow();
-  const [universe, matches] = await Promise.all([
+  const nowIso = now.toISOString();
+  const sources = getDataSources();
+  const [universeResult, matchesResult] = await Promise.allSettled([
     getUniverseAnalysis(),
-    getSportsDataProvider().listMatches({ status: ["scheduled", "live"], limit: 24 }),
+    getSportsDataProvider().listMatches({ status: ["scheduled", "live"] }),
   ]);
+  const universe = universeResult.status === "fulfilled" ? universeResult.value : null;
+  if (universeResult.status === "rejected") {
+    rethrowControlFlow(universeResult.reason);
+    logger.error("shell.market_data_unavailable", { error: universeResult.reason });
+  }
+  if (matchesResult.status === "rejected") {
+    rethrowControlFlow(matchesResult.reason);
+    logger.error("shell.sports_data_unavailable", { error: matchesResult.reason });
+  }
+  // Fixtures past kick-off still awaiting a result update are no longer "next".
+  const matches =
+    matchesResult.status === "fulfilled"
+      ? matchesResult.value
+          .filter((match) => match.status === "live" || match.kickoffAt >= nowIso)
+          .slice(0, 24)
+      : [];
+  const asOf = universe?.asOf || toIsoDate(now);
 
-  const signalNotifications: PlatformNotification[] = universe.assets
-    .filter((asset) => asset.signalHistory[0]?.date === universe.asOf)
+  const signalNotifications: PlatformNotification[] = (universe?.assets ?? [])
+    .filter((asset) => asset.signalHistory[0]?.date === asOf)
     .map((asset) => ({
-      id: `signal-${asset.profile.symbol}-${universe.asOf}`,
+      id: `signal-${asset.profile.symbol}-${asOf}`,
       kind: "signal" as const,
       severity: "info" as const,
       title: `${asset.profile.symbol} signal changed to ${asset.signal.signal}`,
       body: `Composite score ${asset.signal.score >= 0 ? "+" : "−"}${Math.abs(asset.signal.score).toFixed(2)} · confidence ${formatProbability(asset.signal.confidence)}.`,
       href: `/markets/${asset.profile.symbol}`,
-      at: `${universe.asOf}T21:00:00.000Z`,
+      at: `${asOf}T21:00:00.000Z`,
     }));
 
-  const topConviction = [...universe.assets].sort(
+  const topConviction = [...(universe?.assets ?? [])].sort(
     (a, b) => b.signal.confidence - a.signal.confidence,
   )[0];
-  const convictionNotification: PlatformNotification[] = topConviction
-    ? [
-        {
-          id: `conviction-${topConviction.profile.symbol}-${universe.asOf}`,
-          kind: "signal",
-          severity: "info",
-          title: `Highest conviction: ${topConviction.profile.symbol} ${topConviction.signal.signal}`,
-          body: `P(up, ${universe.horizonDays}d) ${formatProbability(topConviction.signal.probabilityUp)} · ${topConviction.signal.regime.replace("_", " ").toLowerCase()} regime.`,
-          href: `/markets/${topConviction.profile.symbol}`,
-          at: `${universe.asOf}T21:05:00.000Z`,
-        },
-      ]
-    : [];
+  const convictionNotification: PlatformNotification[] =
+    universe && topConviction
+      ? [
+          {
+            id: `conviction-${topConviction.profile.symbol}-${universe.asOf}`,
+            kind: "signal",
+            severity: "info",
+            title: `Highest conviction: ${topConviction.profile.symbol} ${topConviction.signal.signal}`,
+            body: `P(up, ${universe.horizonDays}d) ${formatProbability(topConviction.signal.probabilityUp)} · ${topConviction.signal.regime.replace("_", " ").toLowerCase()} regime.`,
+            href: `/markets/${topConviction.profile.symbol}`,
+            at: `${universe.asOf}T21:05:00.000Z`,
+          },
+        ]
+      : [];
 
   const nextMatches = matches
     .slice(0, 12)
@@ -174,24 +251,24 @@ export async function getShellData(): Promise<ShellData> {
   ];
 
   const standingNotifications: PlatformNotification[] = [
-    {
-      id: `model-eval-${universe.asOf}`,
-      kind: "model",
-      severity: "success",
-      title: "Daily model evaluation completed",
-      body: `Composite signal walk-forward hit rate ${formatProbability(universe.evaluation.directionalHitRate ?? 0)} on ${universe.evaluation.directionalCalls.toLocaleString("en-US")} calls.`,
-      href: "/model-lab",
-      at: `${universe.asOf}T22:00:00.000Z`,
-    },
-    {
-      id: "system-demo-data",
-      kind: "system",
-      severity: "info",
-      title: "You are viewing synthetic demo data",
-      body: "Prices, fixtures and results are simulated. Nothing here is a real market or match.",
-      href: "/admin",
-      at: `${universe.asOf}T08:00:00.000Z`,
-    },
+    ...(universe
+      ? [
+          {
+            id: `model-eval-${universe.asOf}`,
+            kind: "model" as const,
+            severity: "success" as const,
+            title: "Daily model evaluation completed",
+            body: `Composite signal walk-forward hit rate ${formatProbability(universe.evaluation.directionalHitRate ?? 0)} on ${universe.evaluation.directionalCalls.toLocaleString("en-US")} calls.`,
+            href: "/model-lab",
+            at: `${universe.asOf}T22:00:00.000Z`,
+          },
+        ]
+      : []),
+    ...dataNotifications(sources, asOf, {
+      marketsFailed: universeResult.status === "rejected",
+      sportsFailed: matchesResult.status === "rejected",
+      now: nowIso,
+    }),
   ];
   const notifications = [
     ...signalNotifications,
@@ -202,7 +279,7 @@ export async function getShellData(): Promise<ShellData> {
 
   const commands: CommandItem[] = [
     ...PAGE_COMMANDS,
-    ...universe.assets.map((asset) => ({
+    ...(universe?.assets ?? []).map((asset) => ({
       id: `asset-${asset.profile.symbol}`,
       group: "Assets" as const,
       label: `${asset.profile.symbol} · ${asset.profile.name}`,

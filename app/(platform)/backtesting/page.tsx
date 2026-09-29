@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { BacktestForm } from "@/features/backtesting/components/backtest-form";
 import { backtestParamsSchema, runBacktestForParams } from "@/features/backtesting/queries";
+import { getDataSources } from "@/features/platform/data-sources";
 import { formatCurrency, formatDate, formatNumber, formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -239,8 +240,11 @@ export default async function BacktestingPage({ searchParams }: { searchParams: 
       )}
 
       <Disclaimer>
-        Simulated results on synthetic demo prices. Backtests are hypothetical, benefit from
-        hindsight in strategy design, and do not predict future results.
+        {getDataSources().markets.simulated
+          ? "Simulated results on synthetic demo prices."
+          : "Simulated trades on historical end-of-day prices."}{" "}
+        Backtests are hypothetical, benefit from hindsight in strategy design, and do not predict
+        future results.
       </Disclaimer>
     </div>
   );

@@ -16,7 +16,8 @@
 
 ## Execution model
 
-- Market orders only, filled immediately at the current (simulated) quote.
+- Market orders only, filled immediately at the current quote: the simulated intraday price in
+  demo mode, or the last completed session's close (delayed) with a licensed end-of-day provider.
 - Fill price = reference × (1 ± 5 bps slippage), adverse to the trader; rounded to cents.
 - Commission = max($1, 5 bps × notional).
 - Accounting: average cost; buy commissions are capitalised into cost basis; sell commissions

@@ -84,3 +84,7 @@ jobs:
       - run: pnpm db:seed
       - name: Seed is idempotent
         run: pnpm db:seed
+      - name: Repository and ingestion integration tests
+        run: pnpm test:db
+        env:
+          TEST_DATABASE_URL: postgresql://esocity:ci_local_only@localhost:5432/esocity

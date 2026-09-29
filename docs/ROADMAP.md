@@ -1,19 +1,37 @@
 # Roadmap
 
-## Phase 1 — MVP foundation ✅ (this release)
+## Phase 1 — MVP foundation ✅
 
 Next.js platform (Core, Markets, Sports, Trade, Backtesting, Model Lab, Reports, Admin,
 Settings), deterministic synthetic data, explainable composite signal with walk-forward
 calibration, Poisson / Dixon–Coles football model, paper trading with risk scoring, PostgreSQL
 schema + migrations + seed, Python ML service with parity tests, CI, Vercel-ready demo mode.
 
-## Phase 2 — Real data
+## Phase 2 — Real data (in progress)
 
-- Implement Polygon.io (or Twelve Data) `MarketDataProvider`; scheduled ingestion into
-  `market_prices` (Vercel Cron or a worker); corporate-action adjustments.
-- Implement SportMonks / API-Football `SportsDataProvider`: fixtures, results, xG, injuries.
-- TimescaleDB (or partitioning) for prices; data-quality monitoring and staleness alerts.
-- Re-fit and re-evaluate every model on real data; publish results in the Model Lab.
+Delivered ([DATA_PIPELINE.md](DATA_PIPELINE.md)):
+
+- ✅ Polygon.io ingestion into `market_prices`: split-adjusted daily bars, NYSE calendar
+  (holidays, early closes), completed sessions only, validation, restatement detection with
+  atomic re-ingestion (split adjustments); served from PostgreSQL by `StoredMarketDataProvider`.
+- ✅ API-Football ingestion: fixtures, 90-minute results, expected goals, availability, previous
+  season as rating priors, per-run request budget; ratings rebuilt walk-forward from stored
+  results by `StoredSportsDataProvider`.
+- ✅ Scheduling (Vercel Cron with `CRON_SECRET`, `pnpm ingest` CLI with `--dry-run`), a run log
+  with a per-domain lease, audit events.
+- ✅ Data-quality monitoring: per-symbol / per-competition freshness in `/api/health` and
+  Admin → Data pipeline; stale data degrades health, missing data fails it.
+- ✅ Model Lab, reports and every page evaluate and label whichever data is configured.
+
+Remaining:
+
+- Dividend (total-return) adjustment and corporate-action history (`/v3/reference/splits`,
+  dividends) as an explicit audit trail.
+- Delayed intraday quotes (snapshot endpoint on paid plans) for paper fills during the session.
+- Cup and continental fixtures for rest/fatigue; player-importance-weighted availability.
+- Alerting on stale data (email/Slack) beyond health status.
+- TimescaleDB (or partitioning) once intraday bars or large universes arrive.
+- Twelve Data / SportMonks adapters behind the same ingestion interfaces.
 
 ## Phase 3 — Accounts and personalisation
 

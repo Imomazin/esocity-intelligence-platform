@@ -24,8 +24,9 @@ walk-forward metrics and calibration), admin console, settings, ⌘K command men
 
 ### Esocity Markets
 
-`/markets` universe screen and `/markets/[symbol]` asset pages for AAPL, MSFT, NVDA, AMZN,
-GOOGL, META, TSLA and SPY: price with SMA 20/50, volume, RSI, MACD, regime, composite signal
+`/markets` universe screen and `/markets/[symbol]` asset pages for the configured universe
+(default AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA and SPY — synthetic in demo mode, licensed
+end-of-day data with Polygon.io): price with SMA 20/50, volume, RSI, MACD, regime, composite signal
 with its weighted components, calibrated probability of a higher close in 20 trading days,
 expected move, risk score, signal history and methodology. Not personalised advice.
 
@@ -34,7 +35,9 @@ expected move, risk score, signal history and methodology. Not personalised advi
 `/sports`, `/sports/football` (filters) and `/sports/match/[id]`: expected goals (λ) with every
 adjustment itemised, 1X2, over/under 1.5/2.5/3.5, both teams to score, clean sheets, the full
 0–0…6–6 scoreline matrix, most likely scorelines, confidence and uncertainty grade, standings,
-form. Fictional clubs make synthetic output impossible to mistake for real fixtures.
+form. In demo mode, fictional clubs make synthetic output impossible to mistake for real
+fixtures; with API-Football, real competitions are labelled as licensed data and every
+probability still carries its uncertainty and the "not betting advice" disclaimer.
 
 ### Esocity Trade
 
@@ -58,7 +61,8 @@ its uncertainty and a disclaimer.
 ## Out of scope for this phase
 
 Real-money trading, broker connectivity, wagering, personalised advice, user accounts
-(demo mode only; auth architecture documented), paid data feeds.
+(demo mode only; auth architecture documented), real-time or intraday data (licensed data is
+end-of-day).
 
 ## Success criteria for the MVP
 

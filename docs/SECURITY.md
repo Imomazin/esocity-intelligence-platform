@@ -50,20 +50,22 @@ In demo mode the (read-only, secret-free) admin console is visible to everyone.
 
 ## Web and API controls (implemented)
 
-| Control                                                                                                       | Where                                               |
-| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| CSP, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy, Permissions-Policy, COOP, HSTS (prod)               | `next.config.ts`                                    |
-| `Cache-Control: no-store` on `/api/*`                                                                         | `next.config.ts`                                    |
-| Same-origin check for non-GET API calls (CSRF defence in depth)                                               | `lib/api/handler.ts`                                |
-| Server Actions: Next.js origin checks + input re-validation + rate limit                                      | `features/trade/actions.ts`                         |
-| JSON content-type enforcement and 64 KB body limit                                                            | `parseJsonBody`                                     |
-| Zod validation of params, query and body; strict symbol / id patterns                                         | route handlers, `lib/api/schemas.ts`                |
-| Rate limits: reads 240/min, orders 30/min, backtests 20/min per client                                        | `lib/security/rate-limit.ts`                        |
-| Opaque 500s; public health reports sanitised error summaries (no hosts/ports)                                 | `lib/api/response.ts`, `lib/security/safe-error.ts` |
-| Env validated at startup; config review never prints values                                                   | `lib/env.ts`                                        |
-| Audit trail with sensitive-key redaction; append-only DB trigger                                              | `lib/audit`, migration `0001`                       |
-| Platform pages `noindex`; API disallowed in robots                                                            | `app/(platform)/layout.tsx`, `app/robots.ts`        |
-| ML service: constant-time API-key check, mandatory key in production, 413 on large bodies, non-root container | `services/ml-api`                                   |
+| Control                                                                                                           | Where                                               |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| CSP, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy, Permissions-Policy, COOP, HSTS (prod)                   | `next.config.ts`                                    |
+| `Cache-Control: no-store` on `/api/*`                                                                             | `next.config.ts`                                    |
+| Same-origin check for non-GET API calls (CSRF defence in depth)                                                   | `lib/api/handler.ts`                                |
+| Server Actions: Next.js origin checks + input re-validation + rate limit                                          | `features/trade/actions.ts`                         |
+| JSON content-type enforcement and 64 KB body limit                                                                | `parseJsonBody`                                     |
+| Zod validation of params, query and body; strict symbol / id patterns                                             | route handlers, `lib/api/schemas.ts`                |
+| Rate limits: reads 240/min, orders 30/min, backtests 20/min per client                                            | `lib/security/rate-limit.ts`                        |
+| Opaque 500s; public health reports sanitised error summaries (no hosts/ports)                                     | `lib/api/response.ts`, `lib/security/safe-error.ts` |
+| Env validated at startup; config review never prints values                                                       | `lib/env.ts`                                        |
+| Audit trail with sensitive-key redaction; append-only DB trigger                                                  | `lib/audit`, migration `0001`                       |
+| Platform pages `noindex`; API disallowed in robots                                                                | `app/(platform)/layout.tsx`, `app/robots.ts`        |
+| ML service: constant-time API-key check, mandatory key in production, 413 on large bodies, non-root container     | `services/ml-api`                                   |
+| Cron ingestion: `Authorization: Bearer <CRON_SECRET>` compared in constant time; 10 requests/min per client       | `lib/security/cron.ts`, `app/api/cron`              |
+| Provider keys in request headers only; redacted from errors; pagination links re-based onto the configured origin | `lib/providers/http.ts`                             |
 
 ### CSP trade-off
 
@@ -93,7 +95,16 @@ the trigger under a privileged role.
 - **PostgreSQL**: TLS (`sslmode=require`), a least-privilege app role (no DDL; migrations run
   with a separate role), pooled connections (`prepare: false` is already set), PITR backups.
 - **Redis/Upstash**: separate databases per environment; token scoped to one database.
-- **Data providers**: keys server-side only; cache and ingest on schedules; respect licences.
+- **Data providers**: keys server-side only (`POLYGON_API_KEY`, `API_FOOTBALL_KEY`), never
+  `NEXT_PUBLIC_`. They are sent as headers — never in URLs, so they cannot leak through logs,
+  proxies or error messages — and any upstream text echoed in an error is redacted. A provider's
+  absolute pagination URL is re-based onto the configured origin, so a key can never be sent to
+  another host. Provider base URLs must be HTTPS (plain HTTP only for `localhost` mocks). Pages
+  never call provider APIs: data is ingested on a schedule and served from PostgreSQL. Respect
+  licence terms for display and redistribution.
+- **Scheduled jobs**: `CRON_SECRET` (≥16 random characters) authenticates `/api/cron/ingest/*`;
+  without it scheduled ingestion is disabled (503). Runs are audited (`ingestion.run`), and a
+  database lease prevents concurrent runs per domain.
 - **Brokers (future)**: see PAPER_TRADING.md → Path to live execution.
 
 ## Known gaps (tracked in ROADMAP)

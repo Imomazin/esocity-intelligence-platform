@@ -1,5 +1,6 @@
 import { checkDatabaseHealth, type DatabaseHealth } from "@/db/client";
 import { getConfigurationIssues, getServerEnv, type ConfigurationIssue } from "@/lib/env";
+import { marketPipelineStatus, sportsPipelineStatus } from "@/lib/ingestion/status";
 import { getKeyValueStore } from "@/lib/kv";
 import { logger } from "@/lib/logger";
 import { getMarketDataProvider } from "@/lib/markets/providers";
@@ -9,6 +10,16 @@ import { APP_VERSION } from "@/lib/site";
 import { getSportsDataProvider } from "@/lib/sports/providers";
 
 export type OverallStatus = "ok" | "degraded" | "down";
+
+export interface DataCheck {
+  status: "up" | "degraded" | "down";
+  provider: string;
+  simulated: boolean;
+  /** Licensed data only: freshness summary from the ingestion pipeline. */
+  freshness?: string;
+  lastIngestion?: { status: string; finishedAt: string | null } | null;
+  error?: string;
+}
 
 export interface HealthReport {
   status: OverallStatus;
@@ -28,8 +39,8 @@ export interface HealthReport {
       error?: string;
     };
     mlApi: EngineHealth & { required: false };
-    marketData: { status: "up" | "down"; provider: string; simulated: boolean; error?: string };
-    sportsData: { status: "up" | "down"; provider: string; simulated: boolean; error?: string };
+    marketData: DataCheck;
+    sportsData: DataCheck;
   };
   configuration: { errors: number; warnings: number; issues: ConfigurationIssue[] };
 }
@@ -59,15 +70,24 @@ async function cacheHealth(): Promise<HealthReport["checks"]["cache"]> {
   }
 }
 
-function providerHealth(resolve: () => { id: string; isSimulated: boolean }): {
-  status: "up" | "down";
-  provider: string;
-  simulated: boolean;
-  error?: string;
-} {
+/**
+ * Provider resolution plus, for licensed data, the ingestion pipeline's freshness: stale or
+ * partially ingested data is `degraded`; nothing servable (or an unreachable store) is `down`.
+ */
+async function dataHealth(
+  resolve: () => { id: string; isSimulated: boolean },
+  pipeline: () => Promise<{
+    assessment: {
+      status: "ok" | "degraded" | "down";
+      summary: string;
+      lastRun: { status: string; finishedAt: string | null } | null;
+    };
+  } | null>,
+): Promise<DataCheck> {
+  let check: DataCheck;
   try {
     const provider = resolve();
-    return { status: "up", provider: provider.id, simulated: provider.isSimulated };
+    check = { status: "up", provider: provider.id, simulated: provider.isSimulated };
   } catch (error) {
     return {
       status: "down",
@@ -76,22 +96,40 @@ function providerHealth(resolve: () => { id: string; isSimulated: boolean }): {
       error: error instanceof Error ? error.message : "unknown error",
     };
   }
+  if (check.simulated) return check;
+  try {
+    const view = await withTimeout(pipeline(), 3_000);
+    if (!view) return check;
+    const { assessment } = view;
+    return {
+      ...check,
+      status: assessment.status === "ok" ? "up" : assessment.status,
+      freshness: assessment.summary,
+      lastIngestion: assessment.lastRun
+        ? { status: assessment.lastRun.status, finishedAt: assessment.lastRun.finishedAt }
+        : null,
+    };
+  } catch (error) {
+    logger.warn("data.health_check_failed", { provider: check.provider, error });
+    return { ...check, status: "down", error: summarizeInfrastructureError(error) };
+  }
 }
 
 /**
  * Aggregate health. `down` when a REQUIRED dependency is unavailable (PostgreSQL in production
- * mode, any configured data provider) or configuration has errors; `degraded` when an optional
- * dependency is down; `ok` otherwise.
+ * mode, any configured data provider — including licensed data with nothing servable) or
+ * configuration has errors; `degraded` when an optional dependency is down or licensed data is
+ * stale; `ok` otherwise.
  */
 export async function getHealthReport(): Promise<HealthReport> {
   const env = getServerEnv();
-  const [database, cache, mlApi] = await Promise.all([
+  const [database, cache, mlApi, marketData, sportsData] = await Promise.all([
     checkDatabaseHealth(),
     cacheHealth(),
     getIntelligenceEngine().health(),
+    dataHealth(getMarketDataProvider, () => marketPipelineStatus()),
+    dataHealth(getSportsDataProvider, () => sportsPipelineStatus()),
   ]);
-  const marketData = providerHealth(getMarketDataProvider);
-  const sportsData = providerHealth(getSportsDataProvider);
   const issues = getConfigurationIssues(env);
   const errors = issues.filter((issue) => issue.severity === "error").length;
   const warnings = issues.filter((issue) => issue.severity === "warning").length;
@@ -105,7 +143,13 @@ export async function getHealthReport(): Promise<HealthReport> {
     (databaseRequired && database.status !== "up")
   ) {
     status = "down";
-  } else if (database.status === "down" || cache.status === "down" || mlApi.status === "down") {
+  } else if (
+    database.status === "down" ||
+    cache.status === "down" ||
+    mlApi.status === "down" ||
+    marketData.status === "degraded" ||
+    sportsData.status === "degraded"
+  ) {
     status = "degraded";
   }
 

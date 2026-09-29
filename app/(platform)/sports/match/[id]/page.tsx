@@ -32,7 +32,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const detail = await getMatchDetail(id);
   return {
     title: detail ? `${detail.match.homeTeam.name} v ${detail.match.awayTeam.name}` : "Match",
-    description: "Poisson / Dixon–Coles match probabilities (fictional demo fixture).",
+    description: `Poisson / Dixon–Coles match probabilities${
+      detail?.provider.isSimulated === false ? "." : " (fictional demo fixture)."
+    }`,
   };
 }
 
@@ -84,7 +86,7 @@ export default async function MatchPage({ params }: Params) {
             </span>
             <span aria-hidden>·</span>
             <DataSourceNote
-              simulated
+              simulated={detail.provider.isSimulated}
               source={engine.source === "remote" ? engine.name : "Esocity football model"}
             />
           </>
@@ -214,7 +216,10 @@ export default async function MatchPage({ params }: Params) {
       )}
 
       <Disclaimer>
-        {siteConfig.sportsDisclaimer} {home.name} and {away.name} are fictional demo clubs.
+        {siteConfig.sportsDisclaimer}{" "}
+        {detail.provider.isSimulated
+          ? `${home.name} and ${away.name} are fictional demo clubs.`
+          : `Fixtures and results: ${detail.provider.displayName}.`}
       </Disclaimer>
     </div>
   );

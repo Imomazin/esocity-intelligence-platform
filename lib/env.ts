@@ -56,6 +56,53 @@ function withDefault<T extends z.ZodType>(schema: T) {
   return z.preprocess(blankToUndefined, schema);
 }
 
+/** Default licensed-data universe: the tickers the demo market simulates. */
+export const DEFAULT_MARKET_SYMBOLS = [
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "AMZN",
+  "GOOGL",
+  "META",
+  "TSLA",
+  "SPY",
+] as const;
+/** API-Football league ids ingested by default: 39 = English Premier League. */
+export const DEFAULT_FOOTBALL_LEAGUES = [39] as const;
+
+const SYMBOL = /^[A-Z][A-Z.]{0,9}$/;
+
+function list(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const symbolList = z
+  .string()
+  .transform((value) => [...new Set(list(value.toUpperCase()))])
+  .refine((symbols) => symbols.length > 0 && symbols.length <= 50, "List 1–50 symbols")
+  .refine(
+    (symbols) => symbols.every((symbol) => SYMBOL.test(symbol)),
+    "Symbols must be 1–10 letters (dots allowed, e.g. BRK.B), separated by commas",
+  );
+
+const leagueList = z
+  .string()
+  .transform((value) => [...new Set(list(value).map(Number))])
+  .refine((ids) => ids.length > 0 && ids.length <= 5, "List 1–5 league ids")
+  .refine(
+    (ids) => ids.every((id) => Number.isInteger(id) && id > 0 && id < 1_000_000),
+    "League ids must be positive integers, separated by commas",
+  );
+
+/** HTTPS endpoint for a provider; plain HTTP only for a local mock server. */
+const providerUrl = z.url({ protocol: /^https?$/ }).refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" || ["localhost", "127.0.0.1"].includes(url.hostname);
+}, "Provider URLs must use HTTPS (HTTP is allowed for localhost only)");
+
 export const serverEnvSchema = z
   .object({
     NODE_ENV: withDefault(z.enum(["development", "test", "production"]).default("development")),
@@ -78,6 +125,22 @@ export const serverEnvSchema = z
     AUTH_SECRET: optional(z.string().min(32, "AUTH_SECRET must be at least 32 characters")),
     MARKET_DATA_PROVIDER: withDefault(z.enum(MARKET_DATA_PROVIDER_IDS).default("demo")),
     SPORTS_DATA_PROVIDER: withDefault(z.enum(SPORTS_DATA_PROVIDER_IDS).default("demo")),
+    MARKET_DATA_SYMBOLS: withDefault(symbolList.default([...DEFAULT_MARKET_SYMBOLS])),
+    MARKET_DATA_BACKFILL_DAYS: withDefault(z.coerce.number().int().min(90).max(7_300).default(730)),
+    POLYGON_API_KEY: optional(z.string().min(8, "POLYGON_API_KEY looks too short")),
+    POLYGON_BASE_URL: optional(providerUrl),
+    POLYGON_REQUESTS_PER_MINUTE: withDefault(z.coerce.number().int().min(1).max(10_000).default(5)),
+    API_FOOTBALL_KEY: optional(z.string().min(8, "API_FOOTBALL_KEY looks too short")),
+    API_FOOTBALL_BASE_URL: optional(providerUrl),
+    API_FOOTBALL_LEAGUES: withDefault(leagueList.default([...DEFAULT_FOOTBALL_LEAGUES])),
+    API_FOOTBALL_SEASON: optional(z.coerce.number().int().min(2000).max(2100)),
+    API_FOOTBALL_MAX_REQUESTS_PER_RUN: withDefault(
+      z.coerce.number().int().min(5).max(10_000).default(30),
+    ),
+    API_FOOTBALL_REQUESTS_PER_MINUTE: withDefault(
+      z.coerce.number().int().min(1).max(10_000).default(10),
+    ),
+    CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
     BROKER_ADAPTER: withDefault(z.enum(BROKER_ADAPTER_IDS).default("paper")),
     RATE_LIMIT_ENABLED: flag(true),
     LOG_LEVEL: withDefault(z.enum(["debug", "info", "warn", "error"]).default("info")),
@@ -156,6 +219,60 @@ export interface ConfigurationIssue {
   message: string;
 }
 
+/** Licensed providers with an ingestion pipeline in this release (others are placeholders). */
+export const IMPLEMENTED_MARKET_PROVIDERS: readonly MarketDataProviderId[] = ["demo", "polygon"];
+export const IMPLEMENTED_SPORTS_PROVIDERS: readonly SportsDataProviderId[] = [
+  "demo",
+  "api-football",
+];
+
+function licensedProviderIssues(
+  env: ServerEnv,
+  provider: {
+    variable: string;
+    selected: string;
+    implemented: readonly string[];
+    keyVariable: string;
+    keySet: boolean;
+    cronPath: string;
+    cli: string;
+  },
+): ConfigurationIssue[] {
+  if (provider.selected === "demo") return [];
+  if (!provider.implemented.includes(provider.selected)) {
+    return [
+      {
+        severity: "error",
+        variable: provider.variable,
+        message: `Provider "${provider.selected}" is planned but not implemented in this release.`,
+      },
+    ];
+  }
+  const issues: ConfigurationIssue[] = [];
+  if (!env.DATABASE_URL) {
+    issues.push({
+      severity: "error",
+      variable: "DATABASE_URL",
+      message: `${provider.variable}=${provider.selected} requires PostgreSQL: licensed data is ingested into the database and served from it.`,
+    });
+  }
+  if (!provider.keySet) {
+    issues.push({
+      severity: "warning",
+      variable: provider.keyVariable,
+      message: `Not set — stored ${provider.selected} data is served, but new data cannot be ingested from this deployment.`,
+    });
+  }
+  if (!env.CRON_SECRET) {
+    issues.push({
+      severity: "warning",
+      variable: "CRON_SECRET",
+      message: `Not set — scheduled ingestion (${provider.cronPath}) is disabled; run \`${provider.cli}\` instead.`,
+    });
+  }
+  return issues;
+}
+
 /**
  * Runtime configuration review used by /api/health and the Admin console. Never includes
  * secret values.
@@ -186,20 +303,26 @@ export function getConfigurationIssues(env: ServerEnv = getServerEnv()): Configu
     });
   }
 
-  if (env.MARKET_DATA_PROVIDER !== "demo") {
-    issues.push({
-      severity: "error",
+  issues.push(
+    ...licensedProviderIssues(env, {
       variable: "MARKET_DATA_PROVIDER",
-      message: `Provider "${env.MARKET_DATA_PROVIDER}" is planned but not implemented in this release.`,
-    });
-  }
-  if (env.SPORTS_DATA_PROVIDER !== "demo") {
-    issues.push({
-      severity: "error",
+      selected: env.MARKET_DATA_PROVIDER,
+      implemented: IMPLEMENTED_MARKET_PROVIDERS,
+      keyVariable: "POLYGON_API_KEY",
+      keySet: Boolean(env.POLYGON_API_KEY),
+      cronPath: "/api/cron/ingest/markets",
+      cli: "pnpm ingest markets",
+    }),
+    ...licensedProviderIssues(env, {
       variable: "SPORTS_DATA_PROVIDER",
-      message: `Provider "${env.SPORTS_DATA_PROVIDER}" is planned but not implemented in this release.`,
-    });
-  }
+      selected: env.SPORTS_DATA_PROVIDER,
+      implemented: IMPLEMENTED_SPORTS_PROVIDERS,
+      keyVariable: "API_FOOTBALL_KEY",
+      keySet: Boolean(env.API_FOOTBALL_KEY),
+      cronPath: "/api/cron/ingest/sports",
+      cli: "pnpm ingest sports",
+    }),
+  );
   if (env.BROKER_ADAPTER !== "paper") {
     issues.push({
       severity: "error",

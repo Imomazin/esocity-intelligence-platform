@@ -33,6 +33,18 @@ mode on synthetic data. Optional services can be added afterwards without code c
    - **ML API** (deployed separately, see ML_SERVICE.md) → `ML_API_URL`, `ML_API_KEY`
      (optionally `ML_API_TIMEOUT_MS`).
    - `/api/health` and `/admin` show each dependency's status after redeploying.
+9. **Licensed data (optional)** — requires PostgreSQL. Full guide: DATA_PIPELINE.md.
+   1. Set `POLYGON_API_KEY` and/or `API_FOOTBALL_KEY` (Production only; never `NEXT_PUBLIC_`),
+      optionally `MARKET_DATA_SYMBOLS`, `API_FOOTBALL_LEAGUES` and the plan quotas.
+   2. From your machine, with the production `DATABASE_URL` and keys:
+      `pnpm ingest markets --dry-run`, then `pnpm ingest markets` and `pnpm ingest sports` for
+      the initial backfill.
+   3. Set `MARKET_DATA_PROVIDER=polygon` / `SPORTS_DATA_PROVIDER=api-football` and
+      `CRON_SECRET` (`openssl rand -hex 32`), then redeploy. The crons in `vercel.json` keep the
+      data current (weekdays 22:15 UTC for markets, daily 06:15 UTC for football); check
+      Admin → Data pipeline after the first scheduled run.
+   4. Hobby plans run crons once a day with hourly precision, which fits both schedules. The
+      ingestion route declares `maxDuration = 300` and stops starting new items after 240 s.
 
 ## Notes
 
@@ -42,3 +54,9 @@ mode on synthetic data. Optional services can be added afterwards without code c
   `DEMO_MODE=false` without one intentionally reports `down` and redirects to the landing page.
 - Serverless memory is per instance: without Upstash or PostgreSQL, a demo paper account may reset
   on a cold start (the Trade page says so).
+- Builds never need the database: with a licensed provider, data-driven pages render per
+  request, so a deployment succeeds before the first ingestion. Until data exists those pages show
+  an error naming the missing data, `/api/health` reports the domain `down`, and the landing page
+  hides its live preview.
+- `vercel.json` also schedules the crons on demo deployments; for domains still on `demo` the
+  endpoint answers "skipped" and does nothing.

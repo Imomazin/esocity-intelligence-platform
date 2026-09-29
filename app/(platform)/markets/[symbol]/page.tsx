@@ -19,15 +19,16 @@ import { SignalHistoryTable } from "@/features/markets/components/signal-history
 import { SignalSummary } from "@/features/markets/components/signal-summary";
 import { getAssetDetail } from "@/features/markets/queries";
 import { formatCurrency, formatDateTimeUtc, formatSignedPercent } from "@/lib/format";
-import { DEMO_SYMBOLS } from "@/lib/markets/universe";
+import { configuredMarketSymbols, getMarketDataProvider } from "@/lib/markets/providers";
 import { siteConfig } from "@/lib/site";
 
 export const revalidate = 300;
-// The universe is fixed: unknown symbols are a real 404 rather than a streamed not-found page.
+// The universe is fixed by configuration: unknown symbols are a real 404 rather than a streamed
+// not-found page.
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return DEMO_SYMBOLS.map((symbol) => ({ symbol }));
+  return configuredMarketSymbols().map((symbol) => ({ symbol }));
 }
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -36,14 +37,24 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { symbol } = await params;
   return {
     title: `${symbol.toUpperCase()} · Markets`,
-    description: `Composite signal, indicators and risk for ${symbol.toUpperCase()} (simulated demo data).`,
+    description: `Composite signal, indicators and risk for ${symbol.toUpperCase()} (${
+      getMarketDataProvider().isSimulated ? "simulated demo data" : "end-of-day data"
+    }).`,
   };
 }
 
 const SESSION_LABEL = {
-  open: "Live (simulated)",
-  "pre-market": "Pre-market · last close",
-  closed: "Market closed · last close",
+  simulated: {
+    open: "Live (simulated)",
+    "pre-market": "Pre-market · last close",
+    closed: "Market closed · last close",
+  },
+  // End-of-day providers: the quote is always the last completed session's close.
+  delayed: {
+    open: "Market open · last close (delayed)",
+    "pre-market": "Pre-market · last close",
+    closed: "Market closed · last close",
+  },
 } as const;
 
 export default async function AssetPage({ params }: Params) {
@@ -72,7 +83,9 @@ export default async function AssetPage({ params }: Params) {
         meta={
           <DataSourceNote
             simulated={detail.provider.isSimulated}
-            source={SESSION_LABEL[quote.session]}
+            source={
+              SESSION_LABEL[quote.source === "simulated" ? "simulated" : "delayed"][quote.session]
+            }
             asOf={formatDateTimeUtc(quote.asOf)}
           />
         }

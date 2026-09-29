@@ -19,7 +19,7 @@ import { siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Markets",
-  description: "Composite market signals, regimes and risk across the Esocity demo universe.",
+  description: "Composite market signals, regimes and risk across the Esocity universe.",
 };
 
 export const revalidate = 300;
@@ -41,7 +41,7 @@ export default async function MarketsPage() {
       <PageHeader
         eyebrow="Esocity Markets"
         title="Market intelligence"
-        description="Composite, explainable signals across the demo universe — trend, momentum, RSI, volatility and regime, calibrated into probabilities."
+        description="Composite, explainable signals across the tracked universe — trend, momentum, RSI, volatility and regime, calibrated into probabilities."
         meta={
           <>
             <DataSourceNote
@@ -101,10 +101,7 @@ export default async function MarketsPage() {
           description={`Signals: ${breadth.signalCounts.BUY} BUY · ${breadth.signalCounts.HOLD} HOLD · ${breadth.signalCounts.SELL} SELL`}
           contentClassName="px-0"
         >
-          <AssetTable
-            assets={overview.assets}
-            caption="Demo universe with prices, signals and risk"
-          />
+          <AssetTable assets={overview.assets} caption="Universe with prices, signals and risk" />
         </SectionCard>
         <div className="space-y-4">
           <SectionCard title="Market movers" description="Change vs previous close">
@@ -124,7 +121,10 @@ export default async function MarketsPage() {
       </div>
 
       <Disclaimer>
-        {siteConfig.financialDisclaimer} Prices shown are simulated demo data.
+        {siteConfig.financialDisclaimer}{" "}
+        {overview.provider.isSimulated
+          ? "Prices shown are simulated demo data."
+          : `Prices: ${overview.provider.displayName} (delayed, not real-time).`}
       </Disclaimer>
     </div>
   );

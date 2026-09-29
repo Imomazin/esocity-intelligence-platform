@@ -23,6 +23,11 @@ export interface MarketDataProvider {
   getDailyBars(symbol: string, options?: DailyBarsOptions): Promise<PriceBar[]>;
   getQuote(symbol: string): Promise<Quote>;
   getSession(): MarketSession;
+  /**
+   * Changes whenever the underlying data changes (e.g. after an ingestion run). Consumers key
+   * derived caches on it. Providers computing data from the clock alone may omit it.
+   */
+  getDataVersion?(): Promise<string>;
 }
 
 export interface DailyBarsOptions {
@@ -34,13 +39,4 @@ export interface DailyBarsOptions {
   limit?: number;
 }
 
-export class ProviderError extends Error {
-  constructor(
-    public readonly providerId: string,
-    message: string,
-    options?: { cause?: unknown },
-  ) {
-    super(`[${providerId}] ${message}`, options);
-    this.name = "ProviderError";
-  }
-}
+export { ProviderError } from "@/lib/providers/errors";

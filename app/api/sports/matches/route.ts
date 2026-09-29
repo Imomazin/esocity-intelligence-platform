@@ -4,6 +4,7 @@ import { summariseMatch } from "@/features/sports/queries";
 import { apiRoute, parseQuery } from "@/lib/api/handler";
 import { jsonSuccess } from "@/lib/api/response";
 import { limitQuerySchema } from "@/lib/api/schemas";
+import { getNow } from "@/lib/clock";
 import { getServerEnv } from "@/lib/env";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import { getSportsDataProvider } from "@/lib/sports/providers";
@@ -40,7 +41,11 @@ export const GET = apiRoute(
         competitionKey: query.competition,
       }),
     ]);
-    const ordered = query.status === "finished" ? [...matches].reverse() : matches;
+    const nowIso = getNow().toISOString();
+    const current = matches.filter(
+      (match) => query.status !== "upcoming" || match.kickoffAt >= nowIso,
+    );
+    const ordered = query.status === "finished" ? [...current].reverse() : current;
     return jsonSuccess(
       {
         competitions,

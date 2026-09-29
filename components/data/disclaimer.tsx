@@ -37,7 +37,7 @@ export function DataSourceNote({
       )}
     >
       <span className="font-medium text-foreground">
-        {simulated ? "Simulated data" : "Live data"}
+        {simulated ? "Simulated data" : "Licensed data"}
       </span>
       <span aria-hidden>·</span>
       <span>{source}</span>

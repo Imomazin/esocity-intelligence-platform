@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:api": "vitest run tests/api",
+    "test:db": "vitest run --config vitest.db.config.mts",
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -25,6 +26,7 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "db:studio": "drizzle-kit studio",
+    "ingest": "tsx scripts/ingest.ts",
     "parity:fixtures": "tsx scripts/generate-parity-fixtures.ts",
     "check:secrets": "bash scripts/check-secrets.sh",
     "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"

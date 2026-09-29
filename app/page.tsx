@@ -29,6 +29,7 @@ import { ArchitectureDiagram } from "@/features/landing/components/architecture-
 import { AuthNotice } from "@/features/landing/components/auth-notice";
 import { SiteHeader } from "@/features/landing/components/site-header";
 import { getLandingPreview } from "@/features/landing/queries";
+import { getDataSources, type DataSources } from "@/features/platform/data-sources";
 import {
   formatCurrency,
   formatDate,
@@ -181,7 +182,7 @@ const METHOD_STEPS: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Database,
     title: "Data",
-    body: "Provider adapters normalise prices and fixtures into one schema. Demo data is synthetic and labelled as such everywhere.",
+    body: "Provider adapters normalise prices and fixtures into one schema; licensed data is ingested, validated and monitored for freshness. Synthetic demo data is labelled as such everywhere.",
   },
   {
     icon: ChartNoAxesColumn,
@@ -217,17 +218,42 @@ const RISK_COPY: Record<RiskLevel, string> = {
   VERY_HIGH: "Score 75–100. Several factors elevated at once — review exposure.",
 };
 
+/** Data sources for copy; null when provider configuration is broken (never fail the page). */
+function safeDataSources(): DataSources | null {
+  try {
+    return getDataSources();
+  } catch {
+    return null;
+  }
+}
+
+function dataPhrase(sources: DataSources | null): string {
+  if (!sources) return "model output";
+  if (sources.markets.simulated && sources.sports.simulated) return "synthetic demo data";
+  if (!sources.markets.simulated && !sources.sports.simulated) return "licensed end-of-day data";
+  return "licensed and synthetic data";
+}
+
+function PreviewUnavailable() {
+  return (
+    <div className="rounded-xl border border-dashed bg-card p-6 text-sm text-muted-foreground">
+      <p className="font-medium text-foreground">Live engine output is temporarily unavailable</p>
+      <p className="mt-1">
+        The latest data could not be loaded. The platform itself is still available — check system
+        status in the Admin console.
+      </p>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────────────────────
 
 export default async function LandingPage() {
   const preview = await getLandingPreview();
-  const {
-    featuredAsset: asset,
-    featuredMatch: match,
-    marketEvaluation,
-    sportsEvaluation,
-    paper,
-  } = preview;
+  const sources = preview?.sources ?? safeDataSources();
+  const asset = preview?.featuredAsset ?? null;
+  const match = preview?.featuredMatch ?? null;
+  const paper = preview?.paper ?? null;
   const year = new Date().getFullYear();
 
   return (
@@ -274,83 +300,91 @@ export default async function LandingPage() {
                   {siteConfig.disclaimer}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  No sign-up · synthetic demo data · paper trading only — no real money, no live
+                  No sign-up · {dataPhrase(sources)} · paper trading only — no real money, no live
                   orders.
                 </p>
               </div>
             </div>
 
-            <div className="space-y-3" aria-label="Live output from the demo engines">
-              <p className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full bg-status-good" aria-hidden />
-                  Live engine output
-                </span>
-                <span>Synthetic data · as of {formatDate(preview.asOf)}</span>
-              </p>
-              {asset && (
-                <PreviewPanel title="Markets signal" meta={`${asset.name}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-2xl font-semibold tracking-tight">{asset.symbol}</p>
-                      <p className="num text-sm">
-                        {formatCurrency(asset.price)}{" "}
-                        <Delta value={asset.changePercent} className="text-xs" />
-                      </p>
+            {!preview && <PreviewUnavailable />}
+            {preview && (
+              <div className="space-y-3" aria-label="Live output from the Esocity engines">
+                <p className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-1.5 rounded-full bg-status-good" aria-hidden />
+                    Live engine output
+                  </span>
+                  <span>
+                    {preview.sources.markets.simulated ? "Synthetic data" : "End-of-day data"} · as
+                    of {formatDate(preview.asOf)}
+                  </span>
+                </p>
+                {asset && (
+                  <PreviewPanel title="Markets signal" meta={`${asset.name}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-2xl font-semibold tracking-tight">{asset.symbol}</p>
+                        <p className="num text-sm">
+                          {formatCurrency(asset.price)}{" "}
+                          <Delta value={asset.changePercent} className="text-xs" />
+                        </p>
+                      </div>
+                      <SignalBadge signal={asset.signal} size="lg" />
                     </div>
-                    <SignalBadge signal={asset.signal} size="lg" />
-                  </div>
-                  <ProbabilityMeter
-                    className="mt-4"
-                    label="Probability of a higher close in 20 trading days"
-                    value={asset.probabilityUp}
-                  />
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                      Confidence <InlineConfidence value={asset.confidence} />
-                    </span>
-                    <RegimeBadge regime={asset.regime} />
-                    <RiskBadge level={asset.riskLevel} />
-                  </div>
-                </PreviewPanel>
-              )}
-              <div className="grid gap-3 sm:grid-cols-[1.35fr_1fr]">
-                {match && (
-                  <PreviewPanel title="Match model" meta={match.competition.shortName}>
-                    <p className="text-sm font-semibold">
-                      {match.home.shortName}{" "}
-                      <span className="font-normal text-muted-foreground">v</span>{" "}
-                      {match.away.shortName}
-                    </p>
-                    <p className="mb-3 text-[11px] text-muted-foreground">
-                      {formatWeekdayDate(match.kickoffAt)}
-                    </p>
-                    <OutcomeBar
-                      home={match.prediction.home}
-                      draw={match.prediction.draw}
-                      away={match.prediction.away}
-                      homeLabel={match.home.code}
-                      awayLabel={match.away.code}
+                    <ProbabilityMeter
+                      className="mt-4"
+                      label="Probability of a higher close in 20 trading days"
+                      value={asset.probabilityUp}
                     />
-                    <p className="num mt-3 text-[11px] text-muted-foreground">
-                      xG {formatNumber(match.prediction.lambdaHome, 2)} –{" "}
-                      {formatNumber(match.prediction.lambdaAway, 2)} · Over 2.5{" "}
-                      {formatProbability(match.prediction.over25)}
-                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        Confidence <InlineConfidence value={asset.confidence} />
+                      </span>
+                      <RegimeBadge regime={asset.regime} />
+                      <RiskBadge level={asset.riskLevel} />
+                    </div>
                   </PreviewPanel>
                 )}
-                <PreviewPanel title="Paper portfolio">
-                  <p className="num text-xl font-semibold tracking-tight">
-                    {formatCurrency(paper.summary.totalValue, { maximumFractionDigits: 0 })}
-                  </p>
-                  <Delta value={paper.summary.totalReturn} className="text-xs" />
-                  <div className="mt-3">
-                    <RiskBadge level={paper.risk.level} />
-                  </div>
-                  <p className="mt-2 text-[11px] text-muted-foreground">Virtual cash only</p>
-                </PreviewPanel>
+                <div className="grid gap-3 sm:grid-cols-[1.35fr_1fr]">
+                  {match && (
+                    <PreviewPanel title="Match model" meta={match.competition.shortName}>
+                      <p className="text-sm font-semibold">
+                        {match.home.shortName}{" "}
+                        <span className="font-normal text-muted-foreground">v</span>{" "}
+                        {match.away.shortName}
+                      </p>
+                      <p className="mb-3 text-[11px] text-muted-foreground">
+                        {formatWeekdayDate(match.kickoffAt)}
+                      </p>
+                      <OutcomeBar
+                        home={match.prediction.home}
+                        draw={match.prediction.draw}
+                        away={match.prediction.away}
+                        homeLabel={match.home.code}
+                        awayLabel={match.away.code}
+                      />
+                      <p className="num mt-3 text-[11px] text-muted-foreground">
+                        xG {formatNumber(match.prediction.lambdaHome, 2)} –{" "}
+                        {formatNumber(match.prediction.lambdaAway, 2)} · Over 2.5{" "}
+                        {formatProbability(match.prediction.over25)}
+                      </p>
+                    </PreviewPanel>
+                  )}
+                  {paper && (
+                    <PreviewPanel title="Paper portfolio">
+                      <p className="num text-xl font-semibold tracking-tight">
+                        {formatCurrency(paper.summary.totalValue, { maximumFractionDigits: 0 })}
+                      </p>
+                      <Delta value={paper.summary.totalReturn} className="text-xs" />
+                      <div className="mt-3">
+                        <RiskBadge level={paper.risk.level} />
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">Virtual cash only</p>
+                    </PreviewPanel>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
 
@@ -410,38 +444,40 @@ export default async function LandingPage() {
                 "Regime classification: uptrend, downtrend, range-bound or high volatility, with the thresholds published.",
                 "A composite signal with visible weights, plus a walk-forward calibrated probability of a higher close over 20 trading days.",
                 <>
-                  Provider-agnostic: synthetic demo data today; Polygon, Twelve Data, Alpha Vantage,
-                  FMP and enterprise feeds slot in behind one{" "}
+                  Provider-agnostic: synthetic demo data or licensed Polygon.io end-of-day prices;
+                  Twelve Data, Alpha Vantage, FMP and enterprise feeds slot in behind the same{" "}
                   <code className="font-mono text-xs">MarketDataProvider</code> interface.
                 </>,
               ]}
             />
-            <PreviewPanel
-              title="Highest-conviction signals"
-              meta={`Through ${formatDate(preview.asOf)}`}
-            >
-              <ul className="divide-y">
-                {preview.assets.map((item) => (
-                  <li
-                    key={item.symbol}
-                    className="grid grid-cols-[3.5rem_auto_1fr] items-center gap-3 py-2.5 text-sm sm:grid-cols-[3.5rem_auto_1fr_auto]"
-                  >
-                    <span className="font-semibold">{item.symbol}</span>
-                    <SignalBadge signal={item.signal} />
-                    <span className="flex items-center justify-end gap-2 text-xs text-muted-foreground sm:justify-start">
-                      P(up){" "}
-                      <span className="num font-medium text-foreground">
-                        {formatProbability(item.probabilityUp)}
+            {preview && (
+              <PreviewPanel
+                title="Highest-conviction signals"
+                meta={`Through ${formatDate(preview.asOf)}`}
+              >
+                <ul className="divide-y">
+                  {preview.assets.map((item) => (
+                    <li
+                      key={item.symbol}
+                      className="grid grid-cols-[3.5rem_auto_1fr] items-center gap-3 py-2.5 text-sm sm:grid-cols-[3.5rem_auto_1fr_auto]"
+                    >
+                      <span className="font-semibold">{item.symbol}</span>
+                      <SignalBadge signal={item.signal} />
+                      <span className="flex items-center justify-end gap-2 text-xs text-muted-foreground sm:justify-start">
+                        P(up){" "}
+                        <span className="num font-medium text-foreground">
+                          {formatProbability(item.probabilityUp)}
+                        </span>
                       </span>
-                    </span>
-                    <RegimeBadge regime={item.regime} className="hidden sm:inline-flex" />
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                {siteConfig.financialDisclaimer}
-              </p>
-            </PreviewPanel>
+                      <RegimeBadge regime={item.regime} className="hidden sm:inline-flex" />
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  {siteConfig.financialDisclaimer}
+                </p>
+              </PreviewPanel>
+            )}
           </div>
         </Section>
 
@@ -498,7 +534,10 @@ export default async function LandingPage() {
                   <RiskBadge level={match.prediction.uncertainty} suffix="uncertainty" />
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  Fictional clubs · synthetic season · {siteConfig.sportsDisclaimer}
+                  {sources?.sports.simulated === false
+                    ? `${sources.sports.name} fixtures`
+                    : "Fictional clubs · synthetic season"}{" "}
+                  · {siteConfig.sportsDisclaimer}
                 </p>
               </PreviewPanel>
             ) : (
@@ -526,55 +565,59 @@ export default async function LandingPage() {
           <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
             <CheckList
               items={[
-                "$100,000 of virtual cash and market orders filled at simulated quotes.",
+                sources?.markets.simulated === false
+                  ? "$100,000 of virtual cash; market orders filled at the last close of licensed end-of-day data."
+                  : "$100,000 of virtual cash and market orders filled at simulated quotes.",
                 "5 bps commission (minimum $1) and 5 bps slippage modelled on every fill.",
                 "Server-side validation for insufficient cash, insufficient holdings, invalid quantities and unknown symbols.",
                 "Open and closed positions, realised and unrealised P&L, exposure, allocation and concentration.",
                 "An event-sourced ledger — every order and rejection is written to the audit trail.",
               ]}
             />
-            <PreviewPanel title="Demo portfolio" meta="Virtual cash only">
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Total value</dt>
-                  <dd className="num text-lg font-semibold">
-                    {formatCurrency(paper.summary.totalValue)}
-                  </dd>
+            {paper && (
+              <PreviewPanel title="Demo portfolio" meta="Virtual cash only">
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Total value</dt>
+                    <dd className="num text-lg font-semibold">
+                      {formatCurrency(paper.summary.totalValue)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Total return</dt>
+                    <dd className="text-lg font-semibold">
+                      <Delta value={paper.summary.totalReturn} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Open positions</dt>
+                    <dd className="num font-medium">{paper.positions.length}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Gross exposure</dt>
+                    <dd className="num font-medium">
+                      {formatPercent(paper.summary.grossExposure, 1)}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-4 space-y-2 border-t pt-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">Portfolio risk score</p>
+                    <RiskBadge level={paper.risk.level} />
+                  </div>
+                  <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {paper.risk.factors.map((factor) => (
+                      <li key={factor.key} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{factor.label}</span>
+                        <span className="num font-medium">
+                          {formatNumber(factor.points, 0)}/{factor.maxPoints}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Total return</dt>
-                  <dd className="text-lg font-semibold">
-                    <Delta value={paper.summary.totalReturn} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Open positions</dt>
-                  <dd className="num font-medium">{paper.positions.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Gross exposure</dt>
-                  <dd className="num font-medium">
-                    {formatPercent(paper.summary.grossExposure, 1)}
-                  </dd>
-                </div>
-              </dl>
-              <div className="mt-4 space-y-2 border-t pt-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">Portfolio risk score</p>
-                  <RiskBadge level={paper.risk.level} />
-                </div>
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {paper.risk.factors.map((factor) => (
-                    <li key={factor.key} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{factor.label}</span>
-                      <span className="num font-medium">
-                        {formatNumber(factor.points, 0)}/{factor.maxPoints}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </PreviewPanel>
+              </PreviewPanel>
+            )}
           </div>
         </Section>
 
@@ -599,62 +642,66 @@ export default async function LandingPage() {
               </li>
             ))}
           </ol>
-          <div className="mt-6 grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Markets · directional hit rate</p>
-              <p className="num text-2xl font-semibold">
-                {marketEvaluation.directionalHitRate === null
-                  ? "—"
-                  : formatPercent(marketEvaluation.directionalHitRate, 1)}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {marketEvaluation.directionalCalls.toLocaleString("en-US")} walk-forward calls
+          {preview && (
+            <div className="mt-6 grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Markets · directional hit rate</p>
+                <p className="num text-2xl font-semibold">
+                  {preview.marketEvaluation.directionalHitRate === null
+                    ? "—"
+                    : formatPercent(preview.marketEvaluation.directionalHitRate, 1)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {preview.marketEvaluation.directionalCalls.toLocaleString("en-US")} walk-forward
+                  calls
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Markets · Brier skill vs base rate</p>
+                <p className="num text-2xl font-semibold">
+                  {preview.marketEvaluation.brierSkillScore === null
+                    ? "—"
+                    : `${formatSignedNumber(preview.marketEvaluation.brierSkillScore * 100, 1)}%`}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Modest by design — honest calibration
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Sports · 1X2 accuracy</p>
+                <p className="num text-2xl font-semibold">
+                  {preview.sportsEvaluation.accuracy === null
+                    ? "—"
+                    : formatPercent(preview.sportsEvaluation.accuracy, 1)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {preview.sportsEvaluation.matches} finished matches, pre-match inputs only
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Sports · Brier skill vs base rates</p>
+                <p className="num text-2xl font-semibold">
+                  {preview.sportsEvaluation.brierSkillScore === null
+                    ? "—"
+                    : `${formatSignedNumber(preview.sportsEvaluation.brierSkillScore * 100, 1)}%`}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Multiclass Brier score</p>
+              </div>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2 lg:col-span-4">
+                {preview.sources.markets.simulated && preview.sources.sports.simulated
+                  ? "Measured live on synthetic demo data to demonstrate the evaluation pipeline — not evidence of performance on real markets or competitions."
+                  : "Measured live and out-of-sample on the ingested history — past skill is no guarantee of future performance."}{" "}
+                Full model cards, including limitations, are in the{" "}
+                <Link
+                  href="/model-lab"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Model Lab
+                </Link>
+                .
               </p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Markets · Brier skill vs base rate</p>
-              <p className="num text-2xl font-semibold">
-                {marketEvaluation.brierSkillScore === null
-                  ? "—"
-                  : `${formatSignedNumber(marketEvaluation.brierSkillScore * 100, 1)}%`}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Modest by design — honest calibration
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Sports · 1X2 accuracy</p>
-              <p className="num text-2xl font-semibold">
-                {sportsEvaluation.accuracy === null
-                  ? "—"
-                  : formatPercent(sportsEvaluation.accuracy, 1)}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {sportsEvaluation.matches} finished matches, pre-match inputs only
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Sports · Brier skill vs base rates</p>
-              <p className="num text-2xl font-semibold">
-                {sportsEvaluation.brierSkillScore === null
-                  ? "—"
-                  : `${formatSignedNumber(sportsEvaluation.brierSkillScore * 100, 1)}%`}
-              </p>
-              <p className="text-[11px] text-muted-foreground">Multiclass Brier score</p>
-            </div>
-            <p className="text-[11px] text-muted-foreground sm:col-span-2 lg:col-span-4">
-              Measured live on synthetic demo data to demonstrate the evaluation pipeline — not
-              evidence of performance on real markets or competitions. Full model cards, including
-              limitations, are in the{" "}
-              <Link
-                href="/model-lab"
-                className="underline underline-offset-2 hover:text-foreground"
-              >
-                Model Lab
-              </Link>
-              .
-            </p>
-          </div>
+          )}
         </Section>
 
         {/* ── Risk-first ───────────────────────────────────────────────────────────────── */}
@@ -743,7 +790,7 @@ export default async function LandingPage() {
               </h2>
               <p className="text-muted-foreground">
                 Explore markets, fixtures, backtests and a paper portfolio in the demo platform — no
-                sign-up, synthetic data, no real money.
+                sign-up, {dataPhrase(sources)}, no real money.
               </p>
             </div>
             <Button size="lg" asChild>

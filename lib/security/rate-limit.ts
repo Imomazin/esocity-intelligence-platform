@@ -27,6 +27,7 @@ export const RATE_LIMITS = {
   read: { key: "api:read", limit: 240, windowSeconds: 60 },
   orders: { key: "trade:orders", limit: 30, windowSeconds: 60 },
   backtests: { key: "backtests:run", limit: 20, windowSeconds: 60 },
+  cron: { key: "cron:ingest", limit: 10, windowSeconds: 60 },
 } satisfies Record<string, RateLimitPolicy>;
 
 export async function checkRateLimit(

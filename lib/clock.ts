@@ -70,6 +70,57 @@ export function daysBetween(start: string, end: string): number {
   return Math.round((parseIsoDate(end).getTime() - parseIsoDate(start).getTime()) / 86_400_000);
 }
 
+// ─── Trading calendars ───────────────────────────────────────────────────────────────────────
+
+/** Regular-session close, in New York local minutes after midnight (16:00). */
+export const REGULAR_CLOSE_MINUTES = 16 * 60;
+const REGULAR_OPEN_MINUTES = 9 * 60 + 30;
+
+/** Which dates trade, and when the regular session closes on each of them. */
+export interface TradingCalendar {
+  readonly id: string;
+  isTradingDay(isoDate: string): boolean;
+  /** Regular-session close in New York local minutes after midnight (960 = 16:00). */
+  closeMinutes(isoDate: string): number;
+}
+
+/**
+ * Weekdays only. The synthetic demo market trades on every weekday, so its calendar ignores
+ * exchange holidays; real providers use the NYSE calendar in lib/markets/calendar.ts.
+ */
+export const WEEKDAY_CALENDAR: TradingCalendar = {
+  id: "weekdays",
+  isTradingDay: isBusinessDay,
+  closeMinutes: () => REGULAR_CLOSE_MINUTES,
+};
+
+export function previousTradingDay(calendar: TradingCalendar, isoDate: string): string {
+  let cursor = addDays(isoDate, -1);
+  while (!calendar.isTradingDay(cursor)) cursor = addDays(cursor, -1);
+  return cursor;
+}
+
+export function latestTradingDayOnOrBefore(calendar: TradingCalendar, isoDate: string): string {
+  let cursor = isoDate;
+  while (!calendar.isTradingDay(cursor)) cursor = addDays(cursor, -1);
+  return cursor;
+}
+
+/** Trading days in [start, end], inclusive. */
+export function tradingDaysBetween(
+  calendar: TradingCalendar,
+  start: string,
+  end: string,
+): string[] {
+  const days: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    if (calendar.isTradingDay(cursor)) days.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return days;
+}
+
 // ─── US equity session (NYSE / Nasdaq regular hours, 09:30–16:00 America/New_York) ──────────
 
 export type MarketSessionStatus = "pre-market" | "open" | "closed";
@@ -110,13 +161,34 @@ function newYorkLocal(now: Date): { date: string; offsetMinutes: number } {
   return { date, offsetMinutes: hours * 60 + minutes };
 }
 
-export function getUsMarketSession(now: Date): MarketSession {
+/** The New York calendar date (YYYY-MM-DD) of an instant. */
+export function newYorkDate(instant: Date): string {
+  return newYorkLocal(instant).date;
+}
+
+/**
+ * The UTC instant a trading date's regular session closes (16:00 New York, or the calendar's
+ * early close). The New York offset is read at noon UTC, which is never inside a DST switch.
+ */
+export function sessionCloseAt(
+  isoDate: string,
+  calendar: TradingCalendar = WEEKDAY_CALENDAR,
+): Date {
+  const { offsetMinutes } = newYorkLocal(new Date(`${isoDate}T12:00:00Z`));
+  const midnightUtc = parseIsoDate(isoDate).getTime();
+  return new Date(midnightUtc + (calendar.closeMinutes(isoDate) - offsetMinutes) * 60_000);
+}
+
+export function getUsMarketSession(
+  now: Date,
+  calendar: TradingCalendar = WEEKDAY_CALENDAR,
+): MarketSession {
   const { date, offsetMinutes } = newYorkLocal(now);
-  // 09:30 and 16:00 New York expressed in UTC.
+  // 09:30 and the close (16:00, or 13:00 on early-close days) New York expressed in UTC.
   const midnightUtc = parseIsoDate(date).getTime();
-  const openAt = new Date(midnightUtc + (9 * 60 + 30 - offsetMinutes) * 60_000);
-  const closeAt = new Date(midnightUtc + (16 * 60 - offsetMinutes) * 60_000);
-  const isTradingDay = isBusinessDay(date);
+  const openAt = new Date(midnightUtc + (REGULAR_OPEN_MINUTES - offsetMinutes) * 60_000);
+  const closeAt = new Date(midnightUtc + (calendar.closeMinutes(date) - offsetMinutes) * 60_000);
+  const isTradingDay = calendar.isTradingDay(date);
 
   if (!isTradingDay) {
     return {
@@ -126,7 +198,7 @@ export function getUsMarketSession(now: Date): MarketSession {
       openAt,
       closeAt,
       elapsedFraction: 1,
-      lastCompletedDate: latestBusinessDayOnOrBefore(date),
+      lastCompletedDate: latestTradingDayOnOrBefore(calendar, date),
     };
   }
 
@@ -139,7 +211,7 @@ export function getUsMarketSession(now: Date): MarketSession {
       openAt,
       closeAt,
       elapsedFraction: 0,
-      lastCompletedDate: previousBusinessDay(date),
+      lastCompletedDate: previousTradingDay(calendar, date),
     };
   }
   if (t >= closeAt.getTime()) {
@@ -160,6 +232,6 @@ export function getUsMarketSession(now: Date): MarketSession {
     openAt,
     closeAt,
     elapsedFraction: (t - openAt.getTime()) / (closeAt.getTime() - openAt.getTime()),
-    lastCompletedDate: previousBusinessDay(date),
+    lastCompletedDate: previousTradingDay(calendar, date),
   };
 }

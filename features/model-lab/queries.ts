@@ -1,13 +1,14 @@
 import "server-only";
 
 import { getUniverseAnalysis } from "@/features/markets/queries";
+import { getDataSources } from "@/features/platform/data-sources";
 import { getSportsOverview } from "@/features/sports/queries";
 import { getNow, toIsoDate } from "@/lib/clock";
 import { getServerEnv } from "@/lib/env";
 import type { ReliabilityBin } from "@/lib/markets/calibration";
 import { REGIME_LABELS, type MarketRegime } from "@/lib/markets/types";
 import { getIntelligenceEngine, type EngineHealth } from "@/lib/ml/engine";
-import { MODEL_CARDS, type ModelCard } from "@/lib/models/registry";
+import { modelCardsFor, type DataOrigins, type ModelCard } from "@/lib/models/registry";
 
 export interface ModelMetric {
   label: string;
@@ -35,6 +36,7 @@ export interface ModelLabEntry {
 export interface ModelLabView {
   entries: ModelLabEntry[];
   mlService: EngineHealth & { configured: boolean };
+  origins: DataOrigins;
 }
 
 function pct(value: number | null, digits = 1): string {
@@ -67,6 +69,11 @@ export async function getModelLabView(): Promise<ModelLabView> {
   ]);
   const markets = universe.evaluation;
   const football = sports.evaluation;
+  const sources = getDataSources();
+  const origins: DataOrigins = {
+    marketsSimulated: sources.markets.simulated,
+    sportsSimulated: sources.sports.simulated,
+  };
 
   // Regime statistics across every feature row in the universe.
   const regimeCounts: Record<MarketRegime, number> = {
@@ -89,13 +96,15 @@ export async function getModelLabView(): Promise<ModelLabView> {
   }
   const averagePersistence = runs > 0 ? classified / runs : 0;
 
-  const entries: ModelLabEntry[] = MODEL_CARDS.map((card) => {
+  const entries: ModelLabEntry[] = modelCardsFor(origins).map((card) => {
     switch (card.key) {
       case "markets.composite-signal":
         return {
           card,
           lastEvaluated: universe.asOf,
-          evaluationNote: `Walk-forward ${markets.evaluationStart ?? "—"} → ${markets.evaluationEnd ?? "—"} · synthetic demo data`,
+          evaluationNote: `Walk-forward ${markets.evaluationStart ?? "—"} → ${markets.evaluationEnd ?? "—"} · ${
+            origins.marketsSimulated ? "synthetic demo data" : "licensed end-of-day data"
+          }`,
           runtimeStatus: "embedded",
           calibration: calibrationPoints(markets.reliability),
           metrics: [
@@ -126,7 +135,9 @@ export async function getModelLabView(): Promise<ModelLabView> {
         return {
           card,
           lastEvaluated: universe.asOf,
-          evaluationNote: "Descriptive statistics across the demo universe history",
+          evaluationNote: `Descriptive statistics across the ${
+            origins.marketsSimulated ? "demo universe" : "universe"
+          } history`,
           runtimeStatus: "embedded",
           calibration: [],
           metrics: [
@@ -141,7 +152,9 @@ export async function getModelLabView(): Promise<ModelLabView> {
         return {
           card,
           lastEvaluated: toIsoDate(getNow()),
-          evaluationNote: `${football.matches} finished demo matches, predictions made before kick-off`,
+          evaluationNote: `${football.matches} finished ${
+            origins.sportsSimulated ? "demo " : ""
+          }matches, predictions made before kick-off`,
           runtimeStatus: "embedded",
           calibration: calibrationPoints(football.reliability),
           metrics: [
@@ -173,7 +186,9 @@ export async function getModelLabView(): Promise<ModelLabView> {
         return {
           card,
           lastEvaluated: toIsoDate(getNow()),
-          evaluationNote: "Estimated before each round from earlier results only",
+          evaluationNote: origins.sportsSimulated
+            ? "Estimated before each round from earlier results only"
+            : "Estimated before each kick-off from earlier results only",
           runtimeStatus: "embedded",
           calibration: [],
           metrics: sports.competitions.flatMap((competition) => [
@@ -222,5 +237,9 @@ export async function getModelLabView(): Promise<ModelLabView> {
     }
   });
 
-  return { entries, mlService: { ...mlHealth, configured: Boolean(env.ML_API_URL) } };
+  return {
+    entries,
+    mlService: { ...mlHealth, configured: Boolean(env.ML_API_URL) },
+    origins,
+  };
 }

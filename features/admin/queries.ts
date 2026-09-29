@@ -3,7 +3,15 @@ import "server-only";
 import { listRecentAuditEvents, type AuditEvent } from "@/lib/audit";
 import { getServerEnv } from "@/lib/env";
 import { getHealthReport, type HealthReport } from "@/lib/health";
+import type { CompetitionFreshness, SymbolFreshness } from "@/lib/ingestion/monitoring";
+import {
+  marketPipelineStatus,
+  sportsPipelineStatus,
+  type PipelineStatusView,
+} from "@/lib/ingestion/status";
+import { logger } from "@/lib/logger";
 import { MARKET_DATA_PROVIDERS, type ProviderDescriptor } from "@/lib/markets/providers/registry";
+import { summarizeInfrastructureError } from "@/lib/security/safe-error";
 import { SPORTS_DATA_PROVIDERS } from "@/lib/sports/providers/registry";
 import { BROKER_ADAPTERS } from "@/lib/trade/brokers/registry";
 
@@ -23,11 +31,42 @@ export interface SafetyControl {
   detail: string;
 }
 
+export type PipelinePanel<T> =
+  | { state: "demo" }
+  | { state: "error"; providerName: string; error: string }
+  | { state: "ready"; providerName: string; schedule: string; view: PipelineStatusView<T> };
+
 export interface AdminView {
   health: HealthReport;
   audit: { events: AuditEvent[]; source: "database" | "memory" };
   registries: ProviderRegistryView[];
   controls: SafetyControl[];
+  pipeline: {
+    markets: PipelinePanel<SymbolFreshness>;
+    sports: PipelinePanel<CompetitionFreshness>;
+  };
+}
+
+/** Cron schedules in vercel.json, described for operators. */
+export const INGESTION_SCHEDULES = {
+  markets: "Weekdays 22:15 UTC, after the US close · /api/cron/ingest/markets",
+  sports: "Daily 06:15 UTC · /api/cron/ingest/sports",
+} as const;
+
+async function pipelinePanel<T>(
+  domain: "markets" | "sports",
+  providerName: string,
+  load: () => Promise<PipelineStatusView<T> | null>,
+): Promise<PipelinePanel<T>> {
+  try {
+    const view = await load();
+    return view
+      ? { state: "ready", providerName, schedule: INGESTION_SCHEDULES[domain], view }
+      : { state: "demo" };
+  } catch (error) {
+    logger.warn("admin.pipeline_status_failed", { domain, error });
+    return { state: "error", providerName, error: summarizeInfrastructureError(error) };
+  }
 }
 
 /**
@@ -36,7 +75,22 @@ export interface AdminView {
  */
 export async function getAdminView(): Promise<AdminView> {
   const env = getServerEnv();
-  const [health, audit] = await Promise.all([getHealthReport(), listRecentAuditEvents(40)]);
+  const providerName = (list: ProviderDescriptor<string>[], id: string) =>
+    list.find((entry) => entry.id === id)?.name ?? id;
+  const [health, audit, markets, sports] = await Promise.all([
+    getHealthReport(),
+    listRecentAuditEvents(40),
+    pipelinePanel(
+      "markets",
+      providerName(MARKET_DATA_PROVIDERS, env.MARKET_DATA_PROVIDER),
+      marketPipelineStatus,
+    ),
+    pipelinePanel(
+      "sports",
+      providerName(SPORTS_DATA_PROVIDERS, env.SPORTS_DATA_PROVIDER),
+      sportsPipelineStatus,
+    ),
+  ]);
 
   const registries: ProviderRegistryView[] = [
     {
@@ -108,5 +162,5 @@ export async function getAdminView(): Promise<AdminView> {
     },
   ];
 
-  return { health, audit, registries, controls };
+  return { health, audit, registries, controls, pipeline: { markets, sports } };
 }

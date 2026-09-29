@@ -79,11 +79,14 @@ export default async function ReportsPage() {
         <TabsContent value="markets" className="space-y-4">
           <SectionCard
             title={`Market intelligence brief — ${formatDate(market.asOf)}`}
-            description="Composite signal model · 20-day horizon · synthetic demo universe"
+            description={`Composite signal model · 20-day horizon · ${
+              market.provider.isSimulated ? "synthetic demo universe" : market.provider.displayName
+            }`}
           >
             <div className="space-y-5 text-sm leading-relaxed">
               <p>
-                The demo universe screens <strong>{tone}</strong> with an average composite score of{" "}
+                The {market.provider.isSimulated ? "demo universe" : "universe"} screens{" "}
+                <strong>{tone}</strong> with an average composite score of{" "}
                 {formatSignedNumber(market.breadth.averageScore, 2)}:{" "}
                 {market.breadth.signalCounts.BUY} BUY, {market.breadth.signalCounts.HOLD} HOLD and{" "}
                 {market.breadth.signalCounts.SELL} SELL signals. {market.breadth.aboveSma50} of{" "}
@@ -192,7 +195,11 @@ export default async function ReportsPage() {
         <TabsContent value="sports" className="space-y-4">
           <SectionCard
             title="Sports model review"
-            description="Football · Poisson / Dixon–Coles · fictional demo competitions"
+            description={`Football · Poisson / Dixon–Coles · ${
+              sports.provider.isSimulated
+                ? "fictional demo competitions"
+                : sports.provider.displayName
+            }`}
           >
             <div className="space-y-5 text-sm leading-relaxed">
               <KeyValueList
@@ -331,8 +338,11 @@ export default async function ReportsPage() {
       </Tabs>
 
       <Disclaimer>
-        {siteConfig.disclaimer} Reports summarise model outputs on synthetic demo data and are not
-        advice.
+        {siteConfig.disclaimer} Reports summarise model outputs on{" "}
+        {market.provider.isSimulated && sports.provider.isSimulated
+          ? "synthetic demo data"
+          : "ingested, delayed data"}{" "}
+        and are not advice.
       </Disclaimer>
     </div>
   );

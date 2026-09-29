@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 
+import { ingestionRuns } from "./ingestion";
 import { assets, marketPrices, marketSignals, watchlistItems, watchlists } from "./markets";
 import { modelRuns, modelVersions } from "./models";
 import { competitions, matchPredictions, matches, sports, teams } from "./sports";
@@ -16,6 +17,7 @@ import {
 import { userPreferences, users } from "./users";
 
 export * from "./enums";
+export * from "./ingestion";
 export * from "./markets";
 export * from "./models";
 export * from "./sports";
@@ -135,3 +137,5 @@ export const backtestsRelations = relations(backtests, ({ one }) => ({
 }));
 
 export const auditEventsRelations = relations(auditEvents, () => ({}));
+
+export const ingestionRunsRelations = relations(ingestionRuns, () => ({}));

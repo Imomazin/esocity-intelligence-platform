@@ -20,20 +20,23 @@ probabilities, signals and decision intelligence. _Probabilistic intelligence, n
 - Secrets must never be committed to Git.
 - Modular architecture that can evolve from an MVP monorepo into separately scalable services.
 
-## Status — MVP foundation (v0.1.0)
+## Status — MVP foundation + real-data pipeline (Phase 2)
 
 A complete, running demo platform: every page, API route and engine works **without any
 external service or API key**. PostgreSQL, Redis and the Python ML service are optional
-upgrades that the app detects and uses when configured.
+upgrades that the app detects and uses when configured — and with PostgreSQL, licensed
+**Polygon.io** market data and **API-Football** fixtures and results can replace the synthetic
+data, one domain at a time ([data pipeline](docs/DATA_PIPELINE.md)).
 
 | Area                 | What exists                                                                                                                                          |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Web app              | Next.js App Router at the repo root: landing page, 12 platform pages, 12 API routes                                                                  |
 | Engines (TypeScript) | Indicators, regimes, composite signal, walk-forward calibration, Poisson/Dixon–Coles, team ratings, paper broker, ledger, portfolio risk, backtester |
-| Data                 | Deterministic synthetic markets (8 symbols) and a fictional football season (22 clubs)                                                               |
-| Database             | PostgreSQL + Drizzle: 23 tables, migrations, append-only audit trigger, idempotent seed                                                              |
+| Data                 | Deterministic synthetic markets (8 symbols) and a fictional football season (22 clubs) by default                                                    |
+| Licensed data        | Polygon.io daily bars and API-Football fixtures, xG and availability: scheduled ingestion, validation, NYSE calendar, freshness monitoring           |
+| Database             | PostgreSQL + Drizzle: 24 tables, migrations, append-only audit trigger, ingestion run log, idempotent seed                                           |
 | ML service           | FastAPI (Python 3.12): sports, market (XGBoost direction model), backtest — parity-tested against the TypeScript engines                             |
-| Quality              | 100 Vitest tests, 63 pytest tests, ESLint, Prettier, Ruff, strict TypeScript, CI workflow                                                            |
+| Quality              | Vitest unit/API suites, PostgreSQL integration tests, 63 pytest tests, ESLint, Prettier, Ruff, strict TypeScript, CI workflow                        |
 
 ## Quick start
 
@@ -55,6 +58,19 @@ docker compose up -d                       # PostgreSQL, Redis (+ REST proxy), M
 pnpm db:migrate && pnpm db:seed
 ```
 
+### Licensed data (optional)
+
+```bash
+# .env.local: DATABASE_URL, POLYGON_API_KEY and/or API_FOOTBALL_KEY (see .env.example)
+pnpm ingest markets --dry-run      # fetch + validate, write nothing
+pnpm ingest markets                # backfill daily bars into PostgreSQL
+pnpm ingest sports                 # fixtures, results, xG, availability
+# then MARKET_DATA_PROVIDER=polygon and/or SPORTS_DATA_PROVIDER=api-football
+```
+
+In production, Vercel Cron keeps the data current (`vercel.json`, authenticated by
+`CRON_SECRET`). See [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md).
+
 ## Scripts
 
 | Command                                                 | Purpose                                                  |
@@ -62,6 +78,8 @@ pnpm db:migrate && pnpm db:seed
 | `pnpm dev` / `pnpm build` / `pnpm start`                | Develop, build, serve                                    |
 | `pnpm lint` / `pnpm typecheck` / `pnpm format:check`    | Static checks                                            |
 | `pnpm test` / `pnpm test:unit` / `pnpm test:api`        | Vitest suites                                            |
+| `TEST_DATABASE_URL=… pnpm test:db`                      | PostgreSQL integration tests (disposable database)       |
+| `pnpm ingest <markets\|sports> [--dry-run]`             | Ingest licensed data (same path as the scheduled job)    |
 | `pnpm db:generate` / `pnpm db:migrate` / `pnpm db:seed` | Drizzle migrations and demo seed (`--reset` to truncate) |
 | `pnpm parity:fixtures`                                  | Regenerate TS → Python parity fixtures                   |
 | `pnpm check:secrets`                                    | Secret scan of tracked files                             |
@@ -75,19 +93,21 @@ ML service: see [`services/ml-api/README.md`](services/ml-api/README.md).
 app/              Next.js routes: landing, (platform) pages, api/* route handlers, metadata
 components/       Design system: ui (shadcn), layout, charts, indicators, data display
 features/         Feature modules (queries, server actions, feature components)
-lib/              Engines and platform libraries (markets, sports, trade, backtesting, ml, auth, api, kv, audit)
+lib/              Engines and platform libraries (markets, sports, trade, backtesting, ml, auth, api, kv, audit,
+                  providers, ingestion)
 db/               Drizzle schema, migrations, seed, repositories
 services/ml-api/  Python FastAPI ML service
-tests/            Vitest unit and API tests
+tests/            Vitest unit, API and PostgreSQL integration tests
 docs/             Product, architecture, engines, security, deployment, roadmap
 infrastructure/   Deployment topology notes
-scripts/          Tooling (parity fixtures, secret scan)
+scripts/          Tooling (ingestion CLI, parity fixtures, secret scan)
 ```
 
 ## Documentation
 
 [Product](docs/PRODUCT.md) · [Architecture](docs/ARCHITECTURE.md) · [Data model](docs/DATA_MODEL.md) ·
 [Markets engine](docs/MARKETS_ENGINE.md) · [Sports engine](docs/SPORTS_ENGINE.md) ·
+[Data pipeline](docs/DATA_PIPELINE.md) ·
 [Paper trading](docs/PAPER_TRADING.md) · [ML service](docs/ML_SERVICE.md) · [Security](docs/SECURITY.md) ·
 [Vercel deployment](docs/VERCEL_DEPLOYMENT.md) · [Roadmap](docs/ROADMAP.md)
 

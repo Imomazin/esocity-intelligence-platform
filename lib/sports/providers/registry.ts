@@ -2,8 +2,9 @@ import type { SportsDataProviderId } from "@/lib/env";
 import type { ProviderDescriptor } from "@/lib/markets/providers/registry";
 
 /**
- * Sports data provider registry. Only `demo` ships in Phase 1; the others are documented
- * placeholders (see docs/SPORTS_ENGINE.md → "Adding a provider").
+ * Sports data provider registry. `demo` (synthetic) and `api-football` (licensed, ingested into
+ * PostgreSQL) are implemented; the others are documented placeholders (see
+ * docs/SPORTS_ENGINE.md → "Adding a provider").
  */
 export const SPORTS_DATA_PROVIDERS: ProviderDescriptor<SportsDataProviderId>[] = [
   {
@@ -26,10 +27,19 @@ export const SPORTS_DATA_PROVIDERS: ProviderDescriptor<SportsDataProviderId>[] =
   {
     id: "api-football",
     name: "API-Football",
-    status: "planned",
-    coverage: "Fixtures, standings, injuries, statistics for 1,000+ competitions",
-    envVars: ["API_FOOTBALL_KEY"],
-    notes: "Rate-limited per day — cache aggressively in Redis and persist to PostgreSQL.",
+    status: "available",
+    coverage:
+      "Fixtures, 90-minute results, expected goals and availability for configured leagues, ingested into PostgreSQL",
+    envVars: [
+      "API_FOOTBALL_KEY",
+      "API_FOOTBALL_LEAGUES",
+      "API_FOOTBALL_MAX_REQUESTS_PER_RUN",
+      "API_FOOTBALL_REQUESTS_PER_MINUTE",
+      "DATABASE_URL",
+      "CRON_SECRET",
+    ],
+    notes:
+      "Daily ingestion (/api/cron/ingest/sports or `pnpm ingest sports`) within a per-run request budget; ratings are rebuilt walk-forward from stored results with last season as priors.",
   },
   {
     id: "opta",

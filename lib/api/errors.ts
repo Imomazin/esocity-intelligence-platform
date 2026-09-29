@@ -113,6 +113,9 @@ export class ServiceUnavailableError extends AppError {
   }
 }
 
+/** Licensed data is configured but not available yet (nothing ingested, or the store is down). */
+export class DataUnavailableError extends ServiceUnavailableError {}
+
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }

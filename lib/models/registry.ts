@@ -198,3 +198,50 @@ export const MODEL_CARDS: ModelCard[] = [
 export function findModelCard(key: string): ModelCard | undefined {
   return MODEL_CARDS.find((card) => card.key === key);
 }
+
+export interface DataOrigins {
+  marketsSimulated: boolean;
+  sportsSimulated: boolean;
+}
+
+/**
+ * Model cards whose data-dependent statements (training data, evaluation, limitations) match
+ * the configured providers. MODEL_CARDS describes the synthetic demo deployment.
+ */
+export function modelCardsFor(origins: DataOrigins): ModelCard[] {
+  return MODEL_CARDS.map((card) => {
+    if (card.key === "markets.composite-signal" && !origins.marketsSimulated) {
+      return {
+        ...card,
+        trainingData:
+          "Split-adjusted daily OHLCV from the licensed market data provider, ingested after each close. Calibration uses only samples whose 20-day outcome was known before each prediction date.",
+        limitations: card.limitations.map((limitation) =>
+          limitation.startsWith("Evaluated on synthetic")
+            ? "Evaluated on the ingested history only (two years by default) — skill varies across regimes and may not persist"
+            : limitation,
+        ),
+      };
+    }
+    if (card.key === "sports.poisson-dixon-coles" && !origins.sportsSimulated) {
+      return {
+        ...card,
+        trainingData:
+          "Ratings re-estimated before every fixture from licensed results final before kick-off (Gamma–Poisson shrinkage toward priors carried over from last season).",
+        evaluation:
+          "Out-of-sample on every finished match of the current season: multi-class Brier score vs typical base rates, log loss, accuracy, reliability.",
+        limitations: [
+          ...card.limitations,
+          "Rest days count league fixtures only — cup and European matches are not ingested",
+        ],
+      };
+    }
+    if (card.key === "sports.team-ratings" && !origins.sportsSimulated) {
+      return {
+        ...card,
+        trainingData:
+          "Finished matches before each kick-off; last season's ratings, regressed 30% toward average, as priors (promoted clubs start from the clubs they replaced).",
+      };
+    }
+    return card;
+  });
+}

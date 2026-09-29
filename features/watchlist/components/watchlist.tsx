@@ -164,7 +164,7 @@ export function WatchlistManager({ assets }: { assets: AssetSummary[] }) {
         <p className="text-sm font-medium">Add to watchlist</p>
         {available.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Every asset in the demo universe is on your watchlist.
+            Every asset in the universe is on your watchlist.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">

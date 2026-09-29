@@ -2,9 +2,48 @@
 
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+
+interface DataCheck {
+  status?: string;
+  error?: string;
+  freshness?: string;
+}
+
+/**
+ * Most failures of data-driven pages come from the data pipeline (nothing ingested yet, database
+ * unreachable). Production error messages are hidden from the client, so ask /api/health — which
+ * is public and secret-free — whether market or sports data is down and say so.
+ */
+function useDataIssues(error: Error): string[] {
+  const [issues, setIssues] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { data?: { checks?: Record<string, DataCheck> } }) => {
+        const checks = body.data?.checks ?? {};
+        const found = (
+          [
+            ["Market data", checks.marketData],
+            ["Sports data", checks.sportsData],
+          ] as const
+        )
+          .filter(([, check]) => check?.status === "down")
+          .map(
+            ([label, check]) => `${label}: ${check?.error ?? check?.freshness ?? "unavailable"}`,
+          );
+        if (!cancelled) setIssues(found);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [error]);
+  return issues;
+}
 
 export default function PlatformError({
   error,
@@ -13,6 +52,8 @@ export default function PlatformError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const dataIssues = useDataIssues(error);
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -31,6 +72,15 @@ export default function PlatformError({
           Something went wrong while computing this page. No data was changed. You can retry, or
           check system status in the Admin console.
         </p>
+        {dataIssues.length > 0 && (
+          <ul className="space-y-0.5 pt-1 text-sm">
+            {dataIssues.map((issue) => (
+              <li key={issue} className="font-medium">
+                {issue}
+              </li>
+            ))}
+          </ul>
+        )}
         {error.digest && (
           <p className="font-mono text-xs text-muted-foreground">Reference: {error.digest}</p>
         )}

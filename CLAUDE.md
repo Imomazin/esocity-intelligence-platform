@@ -40,7 +40,15 @@ landing footer only.
   (`env`, `api`, `auth`, `kv`, `audit`, `ml`, `security`). `features/<module>/` holds queries,
   server actions and feature components. `components/` is the shared design system.
 - Providers are behind interfaces: `MarketDataProvider`, `SportsDataProvider`, `BrokerAdapter`,
-  `IntelligenceEngine`, `PaperTradingStore`, `KeyValueStore`. Only demo/paper implementations exist.
+  `IntelligenceEngine`, `PaperTradingStore`, `KeyValueStore`. Data: synthetic `demo` providers by
+  default; licensed Polygon.io / API-Football data is **ingested into PostgreSQL** (cron route or
+  `pnpm ingest`) and served by the `Stored*Provider`s — pages never call provider APIs. Brokers:
+  paper only. See docs/DATA_PIPELINE.md.
+- Provider HTTP goes through `ProviderHttpClient` (`lib/providers/http.ts`): keys in headers only,
+  Zod-validated payloads, typed `ProviderError`s. Market sessions for licensed data use the NYSE
+  calendar (`lib/markets/calendar.ts`); store only completed sessions.
+- UI copy must match the configured data: use `provider.isSimulated` / `getDataSources()` — never
+  hard-code "synthetic" or "live".
 - Auth attach point: `lib/auth/session.ts` (demo mode today; Clerk / Auth.js documented).
 - Config is validated once in `lib/env.ts`; read env through `getServerEnv()`, not `process.env`.
 - PostgreSQL via Drizzle (`db/`), optional in demo mode. Audit table is append-only (DB trigger).
@@ -52,6 +60,7 @@ landing footer only.
 ```bash
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
+TEST_DATABASE_URL=postgresql://… pnpm test:db   # repositories + ingestion against a disposable DB
 cd services/ml-api && .venv/bin/ruff check . && .venv/bin/pytest
 ```
 

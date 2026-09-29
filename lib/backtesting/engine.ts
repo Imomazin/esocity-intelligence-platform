@@ -253,7 +253,7 @@ export function runBacktest(allBars: readonly PriceBar[], config: BacktestConfig
       `Commission of ${config.feeBps} bps and adverse slippage of ${config.slippageBps} bps on every fill.`,
       "Long/flat only: no leverage, no short selling, whole shares, idle cash earns nothing.",
       "Benchmark buys and holds the same asset from the first open with the same frictions.",
-      "Prices are synthetic demo data. Past (simulated) performance does not predict future results.",
+      "Past (simulated) performance does not predict future results.",
     ],
     metrics: {
       startingCapital: config.initialCapital,

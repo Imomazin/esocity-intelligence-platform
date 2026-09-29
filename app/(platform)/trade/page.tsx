@@ -25,6 +25,7 @@ import {
   OrdersTable,
   PositionsTable,
 } from "@/features/trade/components/trade-tables";
+import { getDataSources } from "@/features/platform/data-sources";
 import { getPaperTradingView } from "@/features/trade/queries";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -44,6 +45,7 @@ const STORAGE_LABEL = {
 
 export default async function TradePage() {
   const view = await getPaperTradingView();
+  const simulatedQuotes = getDataSources().markets.simulated;
   const { summary, risk } = view;
   const holdings = Object.fromEntries(
     view.positions.map((position) => [position.symbol, position.quantity]),
@@ -54,7 +56,9 @@ export default async function TradePage() {
       <PageHeader
         eyebrow="Esocity Trade"
         title="Paper trading"
-        description="Simulated execution against demo quotes — practise, measure and stress-test ideas with zero financial risk."
+        description={`Simulated execution against ${
+          simulatedQuotes ? "demo quotes" : "delayed end-of-day quotes"
+        } — practise, measure and stress-test ideas with zero financial risk.`}
         meta={
           <>
             <span className="inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 font-semibold text-foreground">
@@ -178,6 +182,9 @@ export default async function TradePage() {
               holdingsValue={summary.marketValue}
               execution={view.execution}
               limits={view.limits}
+              quoteLabel={
+                simulatedQuotes ? "the current demo quote" : "the last close (delayed data)"
+              }
             />
           </SectionCard>
           <SectionCard title="Risk" description="Portfolio risk engine">

@@ -14,5 +14,11 @@ Phase 6; today the platform deploys with managed services and the files at the r
 Environments: `development` (local), `preview` (Vercel previews, demo mode), `production`.
 Keep separate databases, Redis instances and ML API keys per environment.
 
-Health: web `GET /api/health` (503 when a required dependency or configuration fails);
-ML `GET /health`. Both are suitable for uptime monitors and container health checks.
+Health: web `GET /api/health` (503 when a required dependency or configuration fails, including
+licensed data with nothing servable; `degraded` when it is stale); ML `GET /health`. Both are
+suitable for uptime monitors and container health checks.
+
+Scheduled jobs: `vercel.json` declares the licensed-data ingestion crons
+(`/api/cron/ingest/markets`, `/api/cron/ingest/sports`), authenticated with `CRON_SECRET`.
+Outside Vercel, call the same endpoints from any scheduler with
+`Authorization: Bearer $CRON_SECRET`, or run `pnpm ingest <domain>` — see docs/DATA_PIPELINE.md.

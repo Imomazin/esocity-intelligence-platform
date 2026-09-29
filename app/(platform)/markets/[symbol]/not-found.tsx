@@ -10,7 +10,7 @@ export default function AssetNotFound() {
       icon={ChartCandlestick}
       className="mx-auto mt-10 max-w-lg"
       title="Unknown symbol"
-      description="This symbol is not part of the demo universe. Real-market coverage arrives with licensed data providers in Phase 2."
+      description="This symbol is not part of the configured universe, or it does not have enough history to analyse yet."
       action={
         <Button asChild>
           <Link href="/markets">Browse markets</Link>

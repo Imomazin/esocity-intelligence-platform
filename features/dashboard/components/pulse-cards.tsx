@@ -168,7 +168,10 @@ export function PulseCards({
             : formatSignedNumber(sports.evaluation.brierSkillScore * 100, 1)}
           %
         </p>
-        <p>Walk-forward, out-of-sample on synthetic demo data</p>
+        <p>
+          Walk-forward, out-of-sample on{" "}
+          {sports.provider.isSimulated ? "synthetic demo data" : "licensed results"}
+        </p>
       </PulseCard>
     </div>
   );

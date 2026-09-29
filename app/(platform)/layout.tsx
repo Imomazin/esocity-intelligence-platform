@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
+import { getDataSources } from "@/features/platform/data-sources";
 import { getShellData } from "@/features/platform/queries";
 import { buildDemoSession } from "@/lib/auth/demo";
 import { getSession } from "@/lib/auth/session";
@@ -11,7 +12,7 @@ import { getServerEnv } from "@/lib/env";
 import { siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
-  // The platform shows synthetic, per-session data — keep it out of search indexes.
+  // The platform shows per-session (and, in demo mode, synthetic) data — keep it out of indexes.
   robots: { index: false, follow: false },
 };
 
@@ -31,6 +32,7 @@ export default async function PlatformLayout({ children }: { children: ReactNode
           shell={shell}
           user={{ displayName: session.user.displayName, mode: session.mode }}
           demoMode={env.DEMO_MODE}
+          sources={getDataSources()}
         />
         <main
           id="main-content"

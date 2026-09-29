@@ -56,9 +56,31 @@ Fictional names prevent synthetic output being mistaken for real fixtures.
 Multiclass Brier score vs base rates (H 0.45 / D 0.26 / A 0.29), log loss, 1X2 accuracy,
 over-2.5 Brier vs 0.52 base rate, BTTS Brier, reliability bins — live in the Model Lab.
 
+## Licensed data (`SPORTS_DATA_PROVIDER=api-football`)
+
+Fixtures, 90-minute results, expected goals and availability are ingested from API-Football into
+PostgreSQL ([DATA_PIPELINE.md](DATA_PIPELINE.md)). `StoredSportsDataProvider` rebuilds every
+pre-match input with the same engines, walk-forward on real fixture times
+(`lib/sports/walk-forward.ts`):
+
+- **Information set** — a fixture sees only results final before its kick-off (kick-off +
+  110 minutes); an early kick-off can inform a later one on the same day. Tested for look-ahead:
+  changing a result never changes the inputs of that fixture or any earlier one.
+- **Priors** — last season's ratings regressed toward average (prior = rating^0.7); promoted
+  clubs start from the average of the clubs they replaced; league baseline and home advantage
+  from last season's estimates. Without a stored previous season, priors are neutral.
+- **Form, xG, table** — last five results; mean xG for/against over those matches where the
+  provider has xG; league position before kick-off.
+- **Rest** — days since the club's previous league fixture. Cup and European fixtures are not
+  ingested, so rest can be overstated around congested periods.
+- **Availability** — players ruled out count 1, doubtful 0.5: < 1 none, < 3 minor, < 6
+  moderate, otherwise major (count-based; player importance is not modelled).
+
 ## Adding a provider
 
-Implement `SportsDataProvider` (SportMonks, API-Football, Opta placeholders are registered),
-map fixtures, results, xG and availability into `MatchModelInputs`, ingest on a schedule.
+Implement a `FootballSource` (`lib/sports/ingestion.ts`) on top of `ProviderHttpClient`, map
+fixtures, results, xG and availability into the stored shape, wire it into
+`lib/ingestion/service.ts`, and serve it with `StoredSportsDataProvider` (SportMonks and Opta
+placeholders are registered).
 
 Sports probabilities are analytical estimates. **Esocity does not offer betting or wagering.**
