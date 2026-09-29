@@ -89,7 +89,7 @@ export class StoredMarketDataProvider implements MarketDataProvider {
     return (this.options.clock ?? getNow)();
   }
 
-  private get calendar(): TradingCalendar {
+  get calendar(): TradingCalendar {
     return this.options.calendar ?? NYSE_CALENDAR;
   }
 

@@ -57,7 +57,7 @@ export interface MarketOverview {
   gainers: AssetSummary[];
   losers: AssetSummary[];
   breadth: UniverseBreadth;
-  evaluation: Omit<WalkForwardEvaluation, "reliability">;
+  evaluation: Omit<WalkForwardEvaluation, "reliability" | "timeline">;
   horizonDays: number;
 }
 

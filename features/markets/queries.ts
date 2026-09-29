@@ -107,7 +107,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
   const [analysis, quotes] = await Promise.all([getUniverseAnalysis(), getQuotes()]);
   const assets = analysis.assets.map((asset) => toSummary(asset, quotes.get(asset.profile.symbol)));
   const byChange = [...assets].sort((a, b) => b.changePercent - a.changePercent);
-  const { reliability: _reliability, ...evaluation } = analysis.evaluation;
+  const { reliability: _reliability, timeline: _timeline, ...evaluation } = analysis.evaluation;
   return {
     asOf: analysis.asOf,
     session: sessionInfo(provider),

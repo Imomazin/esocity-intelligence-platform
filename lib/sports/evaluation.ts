@@ -1,4 +1,4 @@
-import { mean, round } from "@/lib/quant/stats";
+import { mean, round, wilsonInterval } from "@/lib/quant/stats";
 import { predictMatch } from "@/lib/sports/football-model";
 import type { Match, MatchOutcome, MatchPrediction } from "@/lib/sports/types";
 
@@ -18,6 +18,7 @@ export interface EvaluatedMatch {
   actual: MatchOutcome;
   correct: boolean;
   brier: number;
+  rps: number;
 }
 
 export interface OutcomeReliabilityBin {
@@ -26,6 +27,9 @@ export interface OutcomeReliabilityBin {
   count: number;
   meanPredicted: number | null;
   observedFrequency: number | null;
+  /** 95% Wilson interval of the observed frequency. */
+  observedLower: number | null;
+  observedUpper: number | null;
 }
 
 export interface SportsEvaluation {
@@ -35,6 +39,9 @@ export interface SportsEvaluation {
   baselineBrierScore: number | null;
   brierSkillScore: number | null;
   logLoss: number | null;
+  /** Ranked probability score — respects the order home < draw < away; lower is better. */
+  rps: number | null;
+  baselineRps: number | null;
   over25Brier: number | null;
   over25BaselineBrier: number | null;
   bttsBrier: number | null;
@@ -49,6 +56,23 @@ export function actualOutcome(home: number, away: number): MatchOutcome {
   if (home > away) return "HOME";
   if (home === away) return "DRAW";
   return "AWAY";
+}
+
+/**
+ * Ranked probability score for the ordered outcomes HOME < DRAW < AWAY:
+ *   RPS = ½ · Σ_{k=1..2} (F_k − O_k)²  with F, O the cumulative forecast and outcome.
+ * Unlike the Brier score it rewards putting probability NEAR the result (a draw forecast is
+ * less wrong for a narrow away win than a home-win forecast). Range [0, 1].
+ */
+export function rankedProbabilityScore(
+  probabilities: { home: number; draw: number; away: number },
+  actual: MatchOutcome,
+): number {
+  const f1 = probabilities.home;
+  const f2 = probabilities.home + probabilities.draw;
+  const o1 = actual === "HOME" ? 1 : 0;
+  const o2 = actual === "AWAY" ? 0 : 1;
+  return ((f1 - o1) ** 2 + (f2 - o2) ** 2) / 2;
 }
 
 /** Multi-class Brier score: Σ over outcomes of (p − y)², range [0, 2]. */
@@ -83,6 +107,7 @@ export function evaluateSportsModel(
       actual,
       correct: prediction.mostLikelyOutcome === actual,
       brier: multiclassBrier(prediction.outcome, actual),
+      rps: rankedProbabilityScore(prediction.outcome, actual),
     });
   }
 
@@ -92,6 +117,8 @@ export function evaluateSportsModel(
     count: 0,
     meanPredicted: null,
     observedFrequency: null,
+    observedLower: null,
+    observedUpper: null,
   }));
 
   if (evaluated.length === 0) {
@@ -102,6 +129,8 @@ export function evaluateSportsModel(
       baselineBrierScore: null,
       brierSkillScore: null,
       logLoss: null,
+      rps: null,
+      baselineRps: null,
       over25Brier: null,
       over25BaselineBrier: null,
       bttsBrier: null,
@@ -136,6 +165,9 @@ export function evaluateSportsModel(
     bin.count = accumulator.count;
     bin.meanPredicted = round(accumulator.predicted / accumulator.count, 4);
     bin.observedFrequency = round(accumulator.observed / accumulator.count, 4);
+    const interval = wilsonInterval(accumulator.observed, accumulator.count);
+    bin.observedLower = round(interval.lower, 4);
+    bin.observedUpper = round(interval.upper, 4);
   });
 
   const brier = mean(evaluated.map((entry) => entry.brier));
@@ -183,6 +215,11 @@ export function evaluateSportsModel(
     baselineBrierScore: round(baseline, 4),
     brierSkillScore: baseline > 0 ? round(1 - brier / baseline, 4) : null,
     logLoss: round(logLoss, 4),
+    rps: round(mean(evaluated.map((entry) => entry.rps)), 4),
+    baselineRps: round(
+      mean(evaluated.map((entry) => rankedProbabilityScore(BASELINE_OUTCOME_RATES, entry.actual))),
+      4,
+    ),
     over25Brier: round(over25Brier, 4),
     over25BaselineBrier: round(over25Baseline, 4),
     bttsBrier: round(bttsBrier, 4),

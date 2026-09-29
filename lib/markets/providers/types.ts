@@ -1,4 +1,4 @@
-import type { MarketSession } from "@/lib/clock";
+import type { MarketSession, TradingCalendar } from "@/lib/clock";
 import type { AssetProfile, PriceBar, Quote } from "@/lib/markets/types";
 
 /**
@@ -23,6 +23,11 @@ export interface MarketDataProvider {
   getDailyBars(symbol: string, options?: DailyBarsOptions): Promise<PriceBar[]>;
   getQuote(symbol: string): Promise<Quote>;
   getSession(): MarketSession;
+  /**
+   * Trading calendar of the bars (holidays, early closes). Omitted by providers whose data
+   * trades every weekday — consumers then fall back to WEEKDAY_CALENDAR.
+   */
+  readonly calendar?: TradingCalendar;
   /**
    * Changes whenever the underlying data changes (e.g. after an ingestion run). Consumers key
    * derived caches on it. Providers computing data from the clock alone may omit it.

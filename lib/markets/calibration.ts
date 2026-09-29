@@ -1,5 +1,5 @@
 import type { FeatureRow, TradeSignal } from "@/lib/markets/types";
-import { clamp, fitLogistic1D, logistic, mean, round } from "@/lib/quant/stats";
+import { clamp, fitLogistic1D, logistic, mean, round, wilsonInterval } from "@/lib/quant/stats";
 
 /**
  * Probability calibration for the composite signal.
@@ -38,6 +38,18 @@ export interface ReliabilityBin {
   count: number;
   meanPredicted: number | null;
   observedFrequency: number | null;
+  /** 95% Wilson interval of the observed frequency (sampling uncertainty of the bin). */
+  observedLower: number | null;
+  observedUpper: number | null;
+}
+
+/** Out-of-sample skill for one calendar quarter of prediction dates. */
+export interface SkillPeriod {
+  period: string;
+  predictions: number;
+  brierScore: number;
+  baselineBrierScore: number;
+  brierSkillScore: number | null;
 }
 
 export interface WalkForwardEvaluation {
@@ -55,6 +67,8 @@ export interface WalkForwardEvaluation {
   buyHitRate: number | null;
   sellHitRate: number | null;
   reliability: ReliabilityBin[];
+  /** Skill by quarter — shows whether any edge is stable or concentrated in a few periods. */
+  timeline: SkillPeriod[];
 }
 
 const PROBABILITY_FLOOR = 0.02;
@@ -141,7 +155,36 @@ function emptyBins(): ReliabilityBin[] {
     count: 0,
     meanPredicted: null,
     observedFrequency: null,
+    observedLower: null,
+    observedUpper: null,
   }));
+}
+
+function quarterOf(date: string): string {
+  return `${date.slice(0, 4)}-Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1}`;
+}
+
+function skillTimeline(
+  scored: readonly { p: number; y: number; base: number; sample: CalibrationSample }[],
+): SkillPeriod[] {
+  const periods = new Map<string, { n: number; brier: number; baseline: number }>();
+  for (const { p, y, base, sample } of scored) {
+    const key = quarterOf(sample.date);
+    const entry = periods.get(key) ?? { n: 0, brier: 0, baseline: 0 };
+    entry.n += 1;
+    entry.brier += (p - y) ** 2;
+    entry.baseline += (base - y) ** 2;
+    periods.set(key, entry);
+  }
+  return [...periods.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([period, { n, brier, baseline }]) => ({
+      period,
+      predictions: n,
+      brierScore: round(brier / n, 5),
+      baselineBrierScore: round(baseline / n, 5),
+      brierSkillScore: baseline > 0 ? round(1 - brier / baseline, 4) : null,
+    }));
 }
 
 /**
@@ -203,6 +246,7 @@ export function walkForwardEvaluate(
       buyHitRate: null,
       sellHitRate: null,
       reliability,
+      timeline: [],
     };
   }
 
@@ -242,6 +286,9 @@ export function walkForwardEvaluate(
     bin.count = accumulator.count;
     bin.meanPredicted = round(accumulator.predicted / accumulator.count, 4);
     bin.observedFrequency = round(accumulator.observed / accumulator.count, 4);
+    const interval = wilsonInterval(accumulator.observed, accumulator.count);
+    bin.observedLower = round(interval.lower, 4);
+    bin.observedUpper = round(interval.upper, 4);
   });
 
   const directionalCalls = buyCalls + sellCalls;
@@ -259,5 +306,6 @@ export function walkForwardEvaluate(
     buyHitRate: buyCalls > 0 ? round(buyHits / buyCalls, 4) : null,
     sellHitRate: sellCalls > 0 ? round(sellHits / sellCalls, 4) : null,
     reliability,
+    timeline: skillTimeline(scored),
   };
 }

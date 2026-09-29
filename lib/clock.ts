@@ -106,6 +106,21 @@ export function latestTradingDayOnOrBefore(calendar: TradingCalendar, isoDate: s
   return cursor;
 }
 
+/** The next `count` trading days strictly after `isoDate`. */
+export function nextTradingDays(
+  calendar: TradingCalendar,
+  isoDate: string,
+  count: number,
+): string[] {
+  const days: string[] = [];
+  let cursor = isoDate;
+  while (days.length < count) {
+    cursor = addDays(cursor, 1);
+    if (calendar.isTradingDay(cursor)) days.push(cursor);
+  }
+  return days;
+}
+
 /** Trading days in [start, end], inclusive. */
 export function tradingDaysBetween(
   calendar: TradingCalendar,
